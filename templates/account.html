@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="jumbotron text-center">
+    <h1 class="display-4">Welcome, {{ current_user.name }}!</h1>
+    <p class="lead">Here you can see your profile information and the articles you have voted for.</p>
+    <hr class="my-4">
+    <h2>Profile Information</h2>
+    <ul class="list-group">
+        <li class="list-group-item"><strong>Name:</strong> {{ current_user.name }}</li>
+        <li class="list-group-item"><strong>Username:</strong> {{ current_user.username }}</li>
+        <li class="list-group-item"><strong>Email:</strong> {{ current_user.email }}</li>
+    </ul>
+    <h2 class="my-4">Articles You Voted For</h2>
+    <ul class="list-group">
+        {% for vote in votes %}
+            <li class="list-group-item">
+                <a href="{{ url_for('static', filename='uploads/' ~ vote.article.filename) }}" target="_blank">{{ vote.article.title }}</a>
+            </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

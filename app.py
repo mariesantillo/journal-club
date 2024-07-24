@@ -43,6 +43,8 @@ class Vote(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     article_id = db.Column(db.Integer, db.ForeignKey('article.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    article = db.relationship('Article', backref=db.backref('votes', lazy=True))
+    user = db.relationship('User', backref=db.backref('votes', lazy=True))
 
 with app.app_context():
     db.create_all()
@@ -81,12 +83,19 @@ def register():
         new_user = User(name=name, username=username, email=email, password=hashed_password, reminders=reminders)
         db.session.add(new_user)
         db.session.commit()
-        flash('Registration successful! Please log in.', 'success')
-        return redirect(url_for('login'))
+        login_user(new_user)
+        flash('Registration successful! Welcome to your account page.', 'success')
+        return redirect(url_for('account'))
     except Exception as e:
         db.session.rollback()
         flash(f'Registration failed: {str(e)}', 'danger')
         return redirect(url_for('login'))
+
+@app.route('/account')
+@login_required
+def account():
+    votes = Vote.query.filter_by(user_id=current_user.id).all()
+    return render_template('account.html', votes=votes)
 
 @app.route('/logout')
 @login_required
