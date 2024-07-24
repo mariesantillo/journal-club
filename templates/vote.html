@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+    <h2>Vote for an Article</h2>
+    <form method="post">
+        <label for="article">Select Article:</label>
+        <select name="article" required>
+            {% for article in articles %}
+                <option value="{{ article.id }}">{{ article.title }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Vote</button>
+    </form>
+{% endblock %}
