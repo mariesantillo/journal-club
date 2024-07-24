@@ -102,7 +102,7 @@ def subscribe():
 @app.route('/upload', methods=['GET', 'POST'])
 @login_required
 def upload():
-    if request.method == 'POST'):
+    if request.method == 'POST':
         title = request.form['title']
         file = request.files['file']
         if file and title:
