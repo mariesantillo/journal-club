@@ -28,17 +28,24 @@ with app.app_context():
 
 @app.route('/')
 def home():
-    return render_template('home.html')
+    articles = Article.query.all()
+    return render_template('home.html', articles=articles)
 
 @app.route('/subscribe', methods=['GET', 'POST'])
 def subscribe():
-    if request.method == 'POST':
+    if request.method == 'POST'):
         email = request.form['email']
         if not Member.query.filter_by(email=email).first():
             new_member = Member(email=email)
             db.session.add(new_member)
             db.session.commit()
             flash('Subscribed successfully!', 'success')
+
+            # Send confirmation email
+            msg = Message('Welcome to the Journal Club', recipients=[email])
+            msg.body = 'Thank you for subscribing to the Journal Club!'
+            mail.send(msg)
+
         else:
             flash('You are already subscribed!', 'warning')
         return redirect(url_for('home'))
@@ -70,6 +77,15 @@ def vote():
         flash('Voted successfully!', 'success')
         return redirect(url_for('home'))
     return render_template('vote.html', articles=articles)
+
+@app.route('/results')
+def results():
+    results = db.session.query(Article, db.func.count(Vote.id).label('vote_count'))\
+                .outerjoin(Vote)\
+                .group_by(Article.id)\
+                .order_by(db.desc('vote_count'))\
+                .all()
+    return render_template('results.html', results=results)
 
 if __name__ == '__main__':
     app.run(debug=True)

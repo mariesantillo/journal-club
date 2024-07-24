@@ -1,5 +1,18 @@
 {% extends 'base.html' %}
 {% block content %}
-    <h2>Welcome to the Journal Club</h2>
-    <p>Participate in monthly discussions and voting on research articles.</p>
+    <div class="jumbotron text-center">
+        <h1 class="display-4">Welcome to the Journal Club</h1>
+        <p class="lead">Participate in monthly discussions and voting on research articles.</p>
+        <hr class="my-4">
+        <p>Join us today to stay updated with the latest research and discussions.</p>
+        <a class="btn btn-primary btn-lg" href="{{ url_for('subscribe') }}" role="button">Subscribe Now</a>
+    </div>
+    <h2 class="my-4">Uploaded Articles</h2>
+    <ul class="list-group">
+        {% for article in articles %}
+            <li class="list-group-item">
+                <a href="{{ url_for('static', filename='uploads/' ~ article.filename) }}" target="_blank">{{ article.title }}</a>
+            </li>
+        {% endfor %}
+    </ul>
 {% endblock %}

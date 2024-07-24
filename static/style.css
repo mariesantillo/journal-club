@@ -3,35 +3,14 @@ body {
     margin: 0;
     padding: 0;
 }
-header {
-    background: #333;
-    color: #fff;
-    padding: 1em 0;
-    text-align: center;
+.jumbotron {
+    background: #f8f9fa;
+    padding: 2rem 1rem;
 }
-nav a {
-    color: #fff;
-    margin: 0 1em;
+.list-group-item a {
     text-decoration: none;
+    color: #333;
 }
-main {
-    padding: 2em;
-}
-form {
-    max-width: 400px;
-    margin: 0 auto;
-}
-label {
-    display: block;
-    margin: 0.5em 0 0.2em;
-}
-input, select, button {
-    width: 100%;
-    padding: 0.5em;
-    margin-bottom: 1em;
-}
-button {
-    background: #333;
-    color: #fff;
-    border: none;
+.list-group-item a:hover {
+    text-decoration: underline;
 }

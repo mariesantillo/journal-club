@@ -1,9 +1,30 @@
 {% extends 'base.html' %}
 {% block content %}
-    <h2>Subscribe to Journal Club</h2>
-    <form method="post">
-        <label for="email">Email:</label>
-        <input type="email" name="email" required>
-        <button type="submit">Subscribe</button>
+    <h2 class="my-4">Subscribe to Journal Club</h2>
+    <form method="post" class="needs-validation" novalidate>
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" class="form-control" name="email" required>
+            <div class="invalid-feedback">Please enter a valid email address.</div>
+        </div>
+        <button type="submit" class="btn btn-primary">Subscribe</button>
     </form>
+    <script>
+        // Bootstrap form validation
+        (function() {
+            'use strict';
+            window.addEventListener('load', function() {
+                var forms = document.getElementsByClassName('needs-validation');
+                var validation = Array.prototype.filter.call(forms, function(form) {
+                    form.addEventListener('submit', function(event) {
+                        if (form.checkValidity() === false) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                        }
+                        form.classList.add('was-validated');
+                    }, false);
+                });
+            }, false);
+        })();
+    </script>
 {% endblock %}
