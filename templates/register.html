@@ -1,7 +1,32 @@
 {% extends 'base.html' %}
 {% block content %}
+    <h2 class="my-4">Login</h2>
+    <form method="post" action="{{ url_for('login') }}" class="needs-validation" novalidate>
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" class="form-control" name="email" required>
+            <div class="invalid-feedback">Please enter a valid email address.</div>
+        </div>
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" class="form-control" name="password" required>
+            <div class="invalid-feedback">Please enter your password.</div>
+        </div>
+        <button type="submit" class="btn btn-primary">Login</button>
+    </form>
+
     <h2 class="my-4">Register</h2>
-    <form method="post" class="needs-validation" novalidate>
+    <form method="post" action="{{ url_for('register') }}" class="needs-validation" novalidate>
+        <div class="form-group">
+            <label for="name">Name:</label>
+            <input type="text" class="form-control" name="name" required>
+            <div class="invalid-feedback">Please enter your name.</div>
+        </div>
+        <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" class="form-control" name="username" required>
+            <div class="invalid-feedback">Please enter a username.</div>
+        </div>
         <div class="form-group">
             <label for="email">Email:</label>
             <input type="email" class="form-control" name="email" required>
@@ -11,6 +36,18 @@
             <label for="password">Password:</label>
             <input type="password" class="form-control" name="password" required>
             <div class="invalid-feedback">Please enter a password.</div>
+        </div>
+        <div class="form-group">
+            <label for="receive_club_reminder">Receive club reminder:</label>
+            <input type="checkbox" class="form-control" name="receive_club_reminder">
+        </div>
+        <div class="form-group">
+            <label for="receive_vote_reminder">Receive vote reminder:</label>
+            <input type="checkbox" class="form-control" name="receive_vote_reminder">
+        </div>
+        <div class="form-group">
+            <label for="receive_upload_reminder">Receive upload reminder:</label>
+            <input type="checkbox" class="form-control" name="receive_upload_reminder">
         </div>
         <button type="submit" class="btn btn-primary">Register</button>
     </form>

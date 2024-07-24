@@ -30,6 +30,9 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    username = db.Column(db.String(100), unique=True, nullable=False)
+    reminders = db.Column(db.String(200), nullable=False, default="")
 
 class Article(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -53,18 +56,24 @@ def home():
     articles = Article.query.all()
     return render_template('home.html', articles=articles)
 
-@app.route('/register', methods=['GET', 'POST'])
+@app.route('/register', methods=['POST'])
 def register():
-    if request.method == 'POST':
+    try:
+        name = request.form['name']
+        username = request.form['username']
         email = request.form['email']
         password = request.form['password']
         hashed_password = generate_password_hash(password, method='sha256')
-        new_user = User(email=email, password=hashed_password)
+        reminders = ','.join(request.form.getlist('reminders'))
+        new_user = User(name=name, username=username, email=email, password=hashed_password, reminders=reminders)
         db.session.add(new_user)
         db.session.commit()
         flash('Registration successful! Please log in.', 'success')
         return redirect(url_for('login'))
-    return render_template('register.html')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Registration failed: {str(e)}', 'danger')
+        return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -141,7 +150,7 @@ def send_reminder_email():
                 .all()
     if articles:
         top_article = articles[0][0]
-        recipients = [user.email for user in User.query.all()]
+        recipients = [user.email for user in User.query.all() if 'upcoming_journal_club' in user.reminders]
         with mail.connect() as conn:
             for recipient in recipients:
                 message = f"Reminder: The journal club is tomorrow. The top article this week is '{top_article.title}'. Don't forget to read it!"
