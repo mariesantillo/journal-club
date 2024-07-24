@@ -73,6 +73,20 @@ def logout():
     logout_user()
     return redirect(url_for('home'))
 
+@app.route('/subscribe', methods=['GET', 'POST'])
+def subscribe():
+    if request.method == 'POST':
+        email = request.form['email']
+        if not User.query.filter_by(email=email).first():
+            new_user = User(email=email, password=generate_password_hash('defaultpassword', method='sha256'))
+            db.session.add(new_user)
+            db.session.commit()
+            flash('Subscribed successfully!', 'success')
+        else:
+            flash('You are already subscribed!', 'warning')
+        return redirect(url_for('home'))
+    return render_template('subscribe.html')
+
 @app.route('/upload', methods=['GET', 'POST'])
 @login_required
 def upload():
