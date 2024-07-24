@@ -1,6 +1,8 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 
 app = Flask(__name__)
@@ -9,10 +11,13 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///journal_club.db'
 app.config['UPLOAD_FOLDER'] = 'uploads/'
 
 db = SQLAlchemy(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
 
-class Member(db.Model):
+class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
 
 class Article(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -22,36 +27,54 @@ class Article(db.Model):
 class Vote(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     article_id = db.Column(db.Integer, db.ForeignKey('article.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 with app.app_context():
     db.create_all()
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 @app.route('/')
 def home():
     articles = Article.query.all()
     return render_template('home.html', articles=articles)
 
-@app.route('/subscribe', methods=['GET', 'POST'])
-def subscribe():
-    if request.method == 'POST'):
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
         email = request.form['email']
-        if not Member.query.filter_by(email=email).first():
-            new_member = Member(email=email)
-            db.session.add(new_member)
-            db.session.commit()
-            flash('Subscribed successfully!', 'success')
+        password = request.form['password']
+        hashed_password = generate_password_hash(password, method='sha256')
+        new_user = User(email=email, password=hashed_password)
+        db.session.add(new_user)
+        db.session.commit()
+        flash('Registration successful! Please log in.', 'success')
+        return redirect(url_for('login'))
+    return render_template('register.html')
 
-            # Send confirmation email
-            msg = Message('Welcome to the Journal Club', recipients=[email])
-            msg.body = 'Thank you for subscribing to the Journal Club!'
-            mail.send(msg)
-
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+        user = User.query.filter_by(email=email).first()
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            return redirect(url_for('home'))
         else:
-            flash('You are already subscribed!', 'warning')
-        return redirect(url_for('home'))
-    return render_template('subscribe.html')
+            flash('Login failed. Check your email and password.', 'danger')
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('home'))
 
 @app.route('/upload', methods=['GET', 'POST'])
+@login_required
 def upload():
     if request.method == 'POST':
         title = request.form['title']
@@ -67,11 +90,12 @@ def upload():
     return render_template('upload.html')
 
 @app.route('/vote', methods=['GET', 'POST'])
+@login_required
 def vote():
     articles = Article.query.all()
     if request.method == 'POST':
         article_id = request.form['article']
-        new_vote = Vote(article_id=article_id)
+        new_vote = Vote(article_id=article_id, user_id=current_user.id)
         db.session.add(new_vote)
         db.session.commit()
         flash('Voted successfully!', 'success')
