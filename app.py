@@ -3,13 +3,25 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_mail import Mail, Message
+from apscheduler.schedulers.background import BackgroundScheduler
 import os
+import datetime
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///journal_club.db'
 app.config['UPLOAD_FOLDER'] = 'uploads/'
 
+# Flask-Mail configuration
+app.config['MAIL_SERVER'] = 'smtp.sendgrid.net'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'apikey'  # This is the string 'apikey', not an actual username
+app.config['MAIL_PASSWORD'] = 'your_sendgrid_api_key'
+app.config['MAIL_DEFAULT_SENDER'] = 'your_email@example.com'
+
+mail = Mail(app)
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
@@ -90,7 +102,7 @@ def subscribe():
 @app.route('/upload', methods=['GET', 'POST'])
 @login_required
 def upload():
-    if request.method == 'POST':
+    if request.method == 'POST'):
         title = request.form['title']
         file = request.files['file']
         if file and title:
@@ -103,18 +115,14 @@ def upload():
         return redirect(url_for('home'))
     return render_template('upload.html')
 
-@app.route('/vote', methods=['GET', 'POST'])
+@app.route('/vote/<int:article_id>', methods=['POST'])
 @login_required
-def vote():
-    articles = Article.query.all()
-    if request.method == 'POST':
-        article_id = request.form['article']
-        new_vote = Vote(article_id=article_id, user_id=current_user.id)
-        db.session.add(new_vote)
-        db.session.commit()
-        flash('Voted successfully!', 'success')
-        return redirect(url_for('home'))
-    return render_template('vote.html', articles=articles)
+def vote(article_id):
+    new_vote = Vote(article_id=article_id, user_id=current_user.id)
+    db.session.add(new_vote)
+    db.session.commit()
+    flash('Voted successfully!', 'success')
+    return redirect(url_for('home'))
 
 @app.route('/results')
 def results():
@@ -124,6 +132,27 @@ def results():
                 .order_by(db.desc('vote_count'))\
                 .all()
     return render_template('results.html', results=results)
+
+def send_reminder_email():
+    articles = db.session.query(Article, db.func.count(Vote.id).label('vote_count'))\
+                .outerjoin(Vote)\
+                .group_by(Article.id)\
+                .order_by(db.desc('vote_count'))\
+                .all()
+    if articles:
+        top_article = articles[0][0]
+        recipients = [user.email for user in User.query.all()]
+        with mail.connect() as conn:
+            for recipient in recipients:
+                message = f"Reminder: The journal club is tomorrow. The top article this week is '{top_article.title}'. Don't forget to read it!"
+                msg = Message(subject="Journal Club Reminder",
+                              recipients=[recipient],
+                              body=message)
+                conn.send(msg)
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(func=send_reminder_email, trigger="cron", day_of_week='sun', hour=8)  # Example: run every Sunday at 8 AM
+scheduler.start()
 
 if __name__ == '__main__':
     app.run(debug=True)

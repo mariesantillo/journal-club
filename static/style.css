@@ -2,15 +2,47 @@ body {
     font-family: Arial, sans-serif;
     margin: 0;
     padding: 0;
+    background-color: #E7E7E7;
+}
+.navbar {
+    background-color: #252525 !important;
+}
+.navbar-brand, .nav-link {
+    color: #E7E7E7 !important;
+}
+.nav-link:hover {
+    color: #99CAC7 !important;
 }
 .jumbotron {
-    background: #f8f9fa;
+    background: #B3C8BF;
     padding: 2rem 1rem;
+}
+.list-group-item {
+    background-color: #5C9A99;
+    color: #E7E7E7;
 }
 .list-group-item a {
     text-decoration: none;
-    color: #333;
+    color: #E7E7E7;
 }
 .list-group-item a:hover {
     text-decoration: underline;
+}
+.btn-primary {
+    background-color: #5C9A99;
+    border-color: #5C9A99;
+}
+.btn-primary:hover {
+    background-color: #99CAC7;
+    border-color: #99CAC7;
+}
+.alert-success {
+    background-color: #99CAC7;
+    color: #252525;
+    border-color: #99CAC7;
+}
+.alert-danger {
+    background-color: #E7E7E7;
+    color: #252525;
+    border-color: #E7E7E7;
 }

@@ -12,6 +12,9 @@
         {% for article in articles %}
             <li class="list-group-item">
                 <a href="{{ url_for('static', filename='uploads/' ~ article.filename) }}" target="_blank">{{ article.title }}</a>
+                <form method="post" action="{{ url_for('vote', article_id=article.id) }}">
+                    <button type="submit" class="btn btn-primary btn-sm mt-2">Vote with 👍</button>
+                </form>
             </li>
         {% endfor %}
     </ul>
