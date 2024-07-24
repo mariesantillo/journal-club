@@ -78,7 +78,7 @@ def register():
         username = request.form['username']
         email = request.form['email']
         password = request.form['password']
-        hashed_password = generate_password_hash(password, method='sha256')
+        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
         reminders = ','.join(request.form.getlist('reminders'))
         new_user = User(name=name, username=username, email=email, password=hashed_password, reminders=reminders)
         db.session.add(new_user)
@@ -108,7 +108,7 @@ def subscribe():
     if request.method == 'POST':
         email = request.form['email']
         if not User.query.filter_by(email=email).first():
-            new_user = User(email=email, password=generate_password_hash('defaultpassword', method='sha256'))
+            new_user = User(email=email, password=generate_password_hash('defaultpassword', method='pbkdf2:sha256'))
             db.session.add(new_user)
             db.session.commit()
             flash('Subscribed successfully!', 'success')
