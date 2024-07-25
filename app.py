@@ -59,19 +59,6 @@ def home():
     articles = Article.query.all()
     return render_template('home.html', articles=articles)
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-        user = User.query.filter_by(email=email).first()
-        if user and check_password_hash(user.password, password):
-            login_user(user)
-            return redirect(url_for('home'))
-        else:
-            flash('Login failed. Check your email and password.', 'danger')
-    return render_template('login.html')
-
 @app.route('/register', methods=['POST'])
 def register():
     try:
@@ -89,8 +76,25 @@ def register():
         return redirect(url_for('account'))
     except Exception as e:
         db.session.rollback()
+        print(f"Registration error: {e}")  # Debug output
         flash(f'Registration failed: {str(e)}', 'danger')
         return redirect(url_for('login'))
+    
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+        user = User.query.filter_by(email=email).first()
+        print(f"Login attempt for user: {user}")  # Debug output
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            print("Login successful")  # Debug output
+            return redirect(url_for('home'))
+        else:
+            print("Login failed")  # Debug output
+            flash('Login failed. Check your email and password.', 'danger')
+    return render_template('login.html')
 
 @app.route('/account')
 @login_required
