@@ -46,3 +46,6 @@ body {
     color: #252525;
     border-color: #E7E7E7;
 }
+.navbar-brand img {
+    margin-right: 10px;
+}
