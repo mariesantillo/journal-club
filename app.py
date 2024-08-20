@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from werkzeug.utils import secure_filename
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -10,7 +11,7 @@ import datetime
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(app.instance_path, 'journal_club.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instance/journal_club.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads/'
 
@@ -24,6 +25,7 @@ app.config['MAIL_DEFAULT_SENDER'] = 'your_email@example.com'
 
 mail = Mail(app)
 db = SQLAlchemy(app)
+migrate=Migrate(app, db)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 

@@ -1,23 +1,11 @@
 from app import app, db
-from sqlalchemy import Table, text
+from sqlalchemy import text
 
-def main():
+def update_schema():
     with app.app_context():
-        # Reflect the existing database
-        metadata = db.MetaData()
-        metadata.reflect(bind=db.engine)
+        db.engine.execute(text('ALTER TABLE vote ADD COLUMN user_id INTEGER'))
+        print("Column 'user_id' added to 'vote' table successfully.")
 
-        # Get the 'user' table
-        user_table = Table('user', metadata, autoload_with=db.engine)
+if __name__ == "__main__":
+    update_schema()
 
-        # Check if the column exists
-        if 'reminders' not in user_table.columns:
-            # Add the new column if it doesn't exist
-            with db.engine.connect() as connection:
-                connection.execute(text('ALTER TABLE user ADD COLUMN reminders TEXT'))
-                print("Column 'reminders' added successfully.")
-        else:
-            print("Column 'reminders' already exists.")
-
-if __name__ == '__main__':
-    main()
