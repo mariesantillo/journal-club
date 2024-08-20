@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
 import os
+from config import Config
 
 app = Flask(__name__)
 app.config.from_object(Config)
