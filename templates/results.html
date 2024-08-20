@@ -3,10 +3,10 @@
     <h2 class="my-4">Voting Results</h2>
     <ul class="list-group">
         {% for article, vote_count in results %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                {{ article.title }}
-                <span class="badge badge-primary badge-pill">{{ vote_count }}</span>
-            </li>
+            <div> 
+                <h3. {{ results.title }} </h3>
+                <p>Votes: {{results.vote_count }}</p>
+            </div>
         {% endfor %}
     </ul>
 {% endblock %}

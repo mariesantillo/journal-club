@@ -1,183 +1,105 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from werkzeug.utils import secure_filename
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
-from flask_mail import Mail, Message
-from apscheduler.schedulers.background import BackgroundScheduler
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+import firebase_admin
+from firebase_admin import credentials, auth, firestore
 import os
-import datetime
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instance/journal_club.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['UPLOAD_FOLDER'] = 'uploads/'
+app.config.from_object(Config)
 
-# Flask-Mail configuration
-app.config['MAIL_SERVER'] = 'smtp.sendgrid.net'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'apikey'  # This is the string 'apikey', not an actual username
-app.config['MAIL_PASSWORD'] = 'your_sendgrid_api_key'
-app.config['MAIL_DEFAULT_SENDER'] = 'your_email@example.com'
+# Initialize Firebase
+cred = credentials.Certificate("/Users/mariefrancine/Desktop/JC/journalclub-6a9bb-firebase-adminsdk-vqslj-34a110ae0f.json")
+firebase_admin.initialize_app(cred, {
+    'storageBucket': 'journalclub-6a9bb.appspot.com'
+})
+db = firestore.client()
+bucket = storage.bucket()
 
-mail = Mail(app)
-db = SQLAlchemy(app)
-migrate=Migrate(app, db)
-login_manager = LoginManager(app)
-login_manager.login_view = 'login'
-
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password = db.Column(db.String(200), nullable=False)
-    name = db.Column(db.String(100), nullable=False)
-    username = db.Column(db.String(100), unique=True, nullable=False)
-    reminders = db.Column(db.String(200), nullable=False, default="")
-
-class Article(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(200), nullable=False)
-    filename = db.Column(db.String(200), nullable=False)
-
-class Vote(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    article_id = db.Column(db.Integer, db.ForeignKey('article.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    article = db.relationship('Article', backref=db.backref('votes', lazy=True))
-    user = db.relationship('User', backref=db.backref('votes', lazy=True))
-
-with app.app_context():
-    db.create_all()
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-
-@app.route('/')
-def home():
-    articles = Article.query.all()
+@app.route('/home')
+def home(): 
+    articles_ref = db.collection('articles')
+    articles = [doc.to_dict() for doc in articles_ref.stream()]
     return render_template('home.html', articles=articles)
 
-@app.route('/register', methods=['POST'])
-def register():
-    try:
-        name = request.form['name']
-        username = request.form['username']
-        email = request.form['email']
-        password = request.form['password']
-        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
-        reminders = ','.join(request.form.getlist('reminders'))
-        new_user = User(name=name, username=username, email=email, password=hashed_password, reminders=reminders)
-        db.session.add(new_user)
-        db.session.commit()
-        login_user(new_user)
-        flash('Registration successful! Welcome to your account page.', 'success')
-        return redirect(url_for('account'))
-    except Exception as e:
-        db.session.rollback()
-        print(f"Registration error: {e}")  # Debug output
-        flash(f'Registration failed: {str(e)}', 'danger')
-        return redirect(url_for('login'))
-    
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-        user = User.query.filter_by(email=email).first()
-        print(f"Login attempt for user: {user}")  # Debug output
-        if user and check_password_hash(user.password, password):
-            login_user(user)
-            print("Login successful")  # Debug output
-            return redirect(url_for('home'))
-        else:
-            print("Login failed")  # Debug output
-            flash('Login failed. Check your email and password.', 'danger')
-    return render_template('login.html')
-
-@app.route('/account')
-@login_required
-def account():
-    votes = Vote.query.filter_by(user_id=current_user.id).all()
-    return render_template('account.html', votes=votes)
-
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    return redirect(url_for('home'))
-
-@app.route('/subscribe', methods=['GET', 'POST'])
-def subscribe():
-    if request.method == 'POST':
-        email = request.form['email']
-        if not User.query.filter_by(email=email).first():
-            new_user = User(email=email, password=generate_password_hash('defaultpassword', method='pbkdf2:sha256'))
-            db.session.add(new_user)
-            db.session.commit()
-            flash('Subscribed successfully!', 'success')
-        else:
-            flash('You are already subscribed!', 'warning')
-        return redirect(url_for('home'))
-    return render_template('subscribe.html')
-
-@app.route('/upload', methods=['GET', 'POST'])
-@login_required
-def upload():
-    if request.method == 'POST':
-        title = request.form['title']
-        file = request.files['file']
-        if file and title:
-            filename = secure_filename(file.filename)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            new_article = Article(title=title, filename=filename)
-            db.session.add(new_article)
-            db.session.commit()
-            flash('Article uploaded successfully!', 'success')
-        return redirect(url_for('home'))
-    return render_template('upload.html')
-
-@app.route('/vote/<int:article_id>', methods=['POST'])
-@login_required
+@app.route('/vote/<string:article_id>', methods=['POST'])
 def vote(article_id):
-    new_vote = Vote(article_id=article_id, user_id=current_user.id)
-    db.session.add(new_vote)
-    db.session.commit()
-    flash('Voted successfully!', 'success')
+    user_id = request.form['user_id']  # Assuming you get the user ID from the session or form
+    vote_ref = db.collection('votes').document(f'{user_id}_{article_id}')
+
+    # Check if the user has already voted
+    if vote_ref.get().exists:
+        flash('You have already voted for this article!', 'warning')
+    else:
+        # Record the vote in Firestore
+        vote_ref.set({
+            'user_id': user_id,
+            'article_id': article_id,
+            'voted_at': datetime.datetime.now()
+        })
+        flash('Voted successfully!', 'success')
+    
     return redirect(url_for('home'))
 
 @app.route('/results')
 def results():
-    results = db.session.query(Article, db.func.count(Vote.id).label('vote_count'))\
-                .outerjoin(Vote)\
-                .group_by(Article.id)\
-                .order_by(db.desc('vote_count'))\
-                .all()
+    articles_ref = db.collection('articles')
+    articles = [doc.to_dict() for doc in articles_ref.stream()]
+
+    results = []
+    for article in articles:
+        votes_ref = db.collection('votes').where('article_id', '==', article['id'])
+        vote_count = len([v for v in votes_ref.stream()])
+        results.append({
+            'title': article['title'],
+            'vote_count': vote_count
+        })
+
     return render_template('results.html', results=results)
 
-def send_reminder_email():
-    articles = db.session.query(Article, db.func.count(Vote.id).label('vote_count'))\
-                .outerjoin(Vote)\
-                .group_by(Article.id)\
-                .order_by(db.desc('vote_count'))\
-                .all()
-    if articles:
-        top_article = articles[0][0]
-        recipients = [user.email for user in User.query.all() if 'upcoming_journal_club' in user.reminders]
-        with mail.connect() as conn:
-            for recipient in recipients:
-                message = f"Reminder: The journal club is tomorrow. The top article this week is '{top_article.title}'. Don't forget to read it!"
-                msg = Message(subject="Journal Club Reminder",
-                              recipients=[recipient],
-                              body=message)
-                conn.send(msg)
+@app.route('/secure-page')
+def secure_page():
+    id_token = request.headers.get('Authorization').split(' ').pop()
+    try: 
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        return render_template('secure_page.html')
+    except Exception as e:
+        return jsonify({'message': 'Unauthorized'}), 401
 
-scheduler = BackgroundScheduler()
-scheduler.add_job(func=send_reminder_email, trigger="cron", day_of_week='sun', hour=8)  # Example: run every Sunday at 8 AM
-scheduler.start()
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    token = data['idToken']
+    
+    try:
+        decoded_token = auth.verify_id_token(token)
+        uid = decoded_token['uid']
+        return jsonify({"message": "Login successful"}), 200
+    except:
+        return jsonify({"error": "Invalid token"}), 401
 
 if __name__ == '__main__':
     app.run(debug=True)
+
+@app.route('/upload', methods=['GET', 'POST'])
+def upload():
+    if request.method == 'POST':
+        title = request.form['title']
+        file = request.files['file']
+        
+        if file and title:
+            # Save the file to Firebase Storage
+            blob = bucket.blob(file.filename)
+            blob.upload_from_file(file, content_type=file.content_type)
+            file_url = blob.public_url
+            
+            # Save metadata to Firestore
+            article_ref = db.collection('articles').add({
+                'title': title,
+                'filename': file.filename,
+                'file_url': file_url,
+                'uploaded_at': datetime.datetime.now()
+            })
+            flash('Article uploaded successfully!', 'success')
+            return redirect(url_for('home'))
+    
+    return render_template('upload.html')
