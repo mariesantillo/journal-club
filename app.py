@@ -124,13 +124,10 @@ def dashboard():
     form = UploadForm()
     if form.validate_on_submit():
         file = form.file.data
-        upload_folder = app.config['UPLOAD_FOLDER']
-
-        # Check if the directory exists; if not, create it
-        if not os.path.exists(upload_folder):
-            os.makedirs(upload_folder)
-
-        file_path = os.path.join(upload_folder, file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        
+        # Save file to the server
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
         file.save(file_path)
 
         article_data = {
@@ -155,7 +152,7 @@ def vote(article_id):
     article = article_ref.get()
     if article.exists:
         article_data = article.to_dict()
-        if current_user.emoji not in article_data['emoji_votes']:
+        if current_user.emoji not in article_data.get('emoji_votes', ''):
             article_data['votes'] += 1
             article_data['emoji_votes'] += current_user.emoji
             article_ref.update(article_data)
@@ -164,7 +161,7 @@ def vote(article_id):
             flash('You have already voted for this article!')
     else:
         flash('Article not found.')
-    return redirect(url_for('index'))
+    return redirect(url_for('dashboard'))
 
 @app.route('/logout')
 @login_required

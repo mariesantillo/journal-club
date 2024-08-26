@@ -1,11 +1,10 @@
-{% extends "base.html" %}
-
-{% block title %}Dashboard{% endblock %}
+{% extends 'base.html' %}
 
 {% block content %}
 <div class="container">
     <h1 class="my-4">Dashboard</h1>
-    <h2>Upload a new article</h2>
+    
+    <h2>Upload a New Article</h2>
     <form method="POST" enctype="multipart/form-data">
         {{ form.hidden_tag() }}
         <div class="form-group">
@@ -16,19 +15,20 @@
             {{ form.file.label(class="form-label") }}
             {{ form.file(class="form-control-file") }}
         </div>
-        <button type="submit" class="btn btn-success">Upload</button>
+        <button type="submit" class="btn btn-primary">Upload</button>
     </form>
-
+    
     <h2 class="mt-4">Your Articles</h2>
     <ul class="list-group">
         {% for article in articles %}
         <li class="list-group-item d-flex justify-content-between align-items-center">
-            {{ article['title'] }}
-            <div>
-                <span class="badge badge-primary badge-pill">{{ article['votes'] }} votes</span>
-                <span>{{ article['emoji_votes'] }}</span>
-            </div>
+            <a href="{{ url_for('static', filename=article.file_path.replace('static/', '')) }}" target="_blank">{{ article.title }}</a>
+            <span>
+                {{ article.votes }} votes
+                <a href="{{ url_for('vote', article_id=article.id) }}" class="btn btn-outline-primary btn-sm ml-2">Vote {{ current_user.emoji }}</a>
+            </span>
         </li>
         {% endfor %}
     </ul>
+</div>
 {% endblock %}
