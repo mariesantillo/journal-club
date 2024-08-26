@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <h1 class="my-4">Upcoming Meetings</h1>
+    <table class="table">
+        <thead>
+            <tr>
+                <th scope="col">Meeting Date</th>
+                <th scope="col">Submission Deadline</th>
+                <th scope="col">Voting Deadline</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for meeting in meetings %}
+            <tr>
+                <td>{{ meeting.meeting_date.strftime('%B %d, %Y') if meeting.meeting_date else 'TBD' }}</td>
+                <td>{{ meeting.submission_deadline.strftime('%B %d, %Y') if meeting.submission_deadline else 'TBD' }}</td>
+                <td>{{ meeting.voting_deadline.strftime('%B %d, %Y') if meeting.voting_deadline else 'TBD' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <a href="{{ url_for('add_meeting') }}" class="btn btn-primary">Add New Meeting</a>
+</div>
+{% endblock %}

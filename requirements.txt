@@ -15,6 +15,7 @@ comm==0.2.2
 contourpy==1.2.1
 cryptography==43.0.0
 cycler==0.12.1
+DateTime==5.5
 debugpy==1.8.2
 decorator==4.4.2
 einops==0.8.0
@@ -136,3 +137,4 @@ Werkzeug==3.0.3
 wheel==0.43.0
 wrapt==1.16.0
 WTForms==3.1.2
+zope.interface==7.0.2

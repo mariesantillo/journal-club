@@ -1,10 +1,11 @@
 from flask import Flask, render_template, redirect, url_for, request, flash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf import FlaskForm
-from firebase_admin import credentials, firestore, initialize_app
+from firebase_admin import credentials, firestore, initialize_app, storage
 from wtforms import StringField, PasswordField, BooleanField, FileField, SubmitField
 from wtforms.validators import InputRequired, Length, ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
 import os
 import json
 import random
@@ -12,6 +13,8 @@ import random
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'thisisasecretkey'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
+
+bucket = storage.bucket()
 
 # Load Firebase credentials from environment variable
 firebase_cred_json = os.getenv('FIREBASE_CREDENTIALS')
@@ -47,6 +50,9 @@ def load_user(user_id):
         user_data = user_ref.to_dict()
         return User(user_id=user_id, username=user_data['username'], password=user_data['password'], emoji=user_data['emoji'])
     return None
+
+def convert_firestore_timestamp(timestamp):
+    return timestamp.to_datetime() if timestamp else None
 
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[InputRequired(), Length(min=4, max=15)])
@@ -124,21 +130,22 @@ def dashboard():
     form = UploadForm()
     if form.validate_on_submit():
         file = form.file.data
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-        
-        # Save file to the server
-        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-        file.save(file_path)
+        blob = bucket.blob(f"uploads/{file.filename}")  # Create a blob in Firebase Storage
+        blob.upload_from_file(file)  # Upload the file
+        blob.make_public()  # Make the file publicly accessible
 
+        # Create a document in the 'articles' collection
         article_data = {
             'title': form.title.data,
-            'file_path': file_path,
+            'file_url': blob.public_url,  # Store the public URL
             'votes': 0,
             'emoji_votes': '',
-            'user_id': current_user.id
+            'user_id': current_user.id,
+            'uploaded_at': firestore.SERVER_TIMESTAMP  # Add a timestamp
         }
-        article_ref = db.collection('articles').document()
-        article_ref.set(article_data)
+
+        article_ref = db.collection('articles').document()  # Create a new document
+        article_ref.set(article_data)  # Set the document with article data
         flash('Article uploaded successfully!')
 
     articles = db.collection('articles').stream()
@@ -177,6 +184,48 @@ def settings():
         flash('Settings updated successfully!')
         return redirect(url_for('settings'))
     return render_template('settings.html', form=form)
+
+@app.route('/meetings')
+@login_required
+def meetings():
+    meetings_ref = db.collection('meetings').order_by('meeting_date').stream()
+    meetings_list = [
+        {
+            'id': meeting.id,
+            'meeting_date': convert_firestore_timestamp(meeting.to_dict().get('meeting_date')),
+            'submission_deadline': convert_firestore_timestamp(meeting.to_dict().get('submission_deadline')),
+            'voting_deadline': convert_firestore_timestamp(meeting.to_dict().get('voting_deadline'))
+        }
+        for meeting in meetings_ref
+    ]
+    return render_template('meetings.html', meetings=meetings_list)
+
+@app.route('/add_meeting', methods=['GET', 'POST'])
+@login_required  # Ensure only logged-in users can access this route
+def add_meeting():
+    if not current_user.is_authenticated:
+        flash('You need to be logged in to add a meeting!')
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        meeting_date = request.form.get('meeting_date')
+        submission_deadline = request.form.get('submission_deadline')
+        voting_deadline = request.form.get('voting_deadline')
+
+        # Convert string dates to Firestore Timestamps
+        meeting_data = {
+            'meeting_date': firestore.Timestamp.fromisoformat(meeting_date),
+            'submission_deadline': firestore.Timestamp.fromisoformat(submission_deadline),
+            'voting_deadline': firestore.Timestamp.fromisoformat(voting_deadline)
+        }
+
+        # Add a new document to the 'meetings' collection
+        meeting_ref = db.collection('meetings').document()
+        meeting_ref.set(meeting_data)
+        flash('Meeting added successfully!')
+
+    return render_template('add_meeting.html')
+
 
 if __name__ == '__main__':
     app.run(debug=True)
