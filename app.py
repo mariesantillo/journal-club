@@ -12,15 +12,16 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'thisisasecretkey'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 
-# Initialize Firebase Admin SDK
-firebase_cred_path = os.getenv('FIREBASE_CREDENTIALS_PATH')
+# Load Firebase credentials from environment variable
+firebase_cred_json = os.getenv('FIREBASE_CREDENTIALS')
 
-if firebase_cred_path:
-    cred = credentials.Certificate(firebase_cred_path)
+if firebase_cred_json:
+    cred_dict = json.loads(firebase_cred_json)
+    cred = credentials.Certificate(cred_dict)
     initialize_app(cred)
     db = firestore.client()  # Initialize Firestore client
 else:
-    print("Firebase credentials path not set. Please set the FIREBASE_CREDENTIALS_PATH environment variable.")
+    print("Firebase credentials not set. Please set the FIREBASE_CREDENTIALS environment variable.")
 
 login_manager = LoginManager()
 login_manager.init_app(app)
