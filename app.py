@@ -139,12 +139,15 @@ def dashboard():
         blob = bucket.blob(f"uploads/{filename}")
         blob.upload_from_file(file, content_type=file.content_type)
 
-        # Get the public URL of the uploaded file
-        file_url = blob.public_url
-
+        # Generate a signed URL or use the public URL depending on your Firebase Storage settings
+        file_url = blob.generate_signed_url(expiration=datetime.timedelta(days=7))  # URL valid for 7 days
+        
+        # Alternatively, for a public URL (if bucket settings allow public access)
+        # file_url = blob.public_url
         article_data = {
             'title': form.title.data,
-            'file_path': file_url,
+            'file_path': file_url,  # Adjust this line as necessary
+            'votes': 0,  # Ensure this is an integer
             'emoji_votes': '',
             'user_id': current_user.id
         }
@@ -164,7 +167,11 @@ def vote(article_id):
     article = article_ref.get()
     if article.exists:
         article_data = article.to_dict()
-        if current_user.emoji not in article_data.get('emoji_votes', ''):
+
+        # Convert 'votes' to an integer if it's not already
+        article_data['votes'] = int(article_data['votes'])
+
+        if current_user.emoji not in article_data['emoji_votes']:
             article_data['votes'] += 1
             article_data['emoji_votes'] += current_user.emoji
             article_ref.update(article_data)
@@ -173,7 +180,7 @@ def vote(article_id):
             flash('You have already voted for this article!')
     else:
         flash('Article not found.')
-    return redirect(url_for('dashboard'))
+    return redirect(url_for('index'))
 
 @app.route('/logout')
 @login_required
