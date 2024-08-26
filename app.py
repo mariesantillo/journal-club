@@ -3,13 +3,18 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf import FlaskForm
 from firebase_admin import credentials, firestore, initialize_app
+from flask_migrate import Migrate  
 from wtforms import StringField, PasswordField, BooleanField, FileField, SubmitField
 from wtforms.validators import InputRequired, Length, ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
+import os
+import random 
 
-# Set up Firebase credentials using environment variables or a secure path
-firebase_cred_path = os.getenv('/Users/mariefrancine/Desktop/journal_club/secrets/journalclub-6a9bb-firebase-adminsdk-vqslj-2958062728.json')
+# Ensure this line is added to set the environment variable within your application
+os.environ['FIREBASE_CREDENTIALS_PATH'] = '/Users/mariefrancine/Desktop/journal_club/secrets/journalclub-6a9bb-firebase-adminsdk-vqslj-2958062728.json'
+
+firebase_cred_path = os.getenv('FIREBASE_CREDENTIALS_PATH')
 
 if firebase_cred_path:
     cred = credentials.Certificate(firebase_cred_path)
@@ -23,25 +28,28 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+EMOJI_LIST = ['🦕', '🐹', '🐰', '🦊', '🐼', '🐷', '🐨', '🐝', '🐞', '🐥', '🐙', '🦭', '🦦', '🦔', '🐧', '🐯', '🫎', '🐢', '🐳', '🐮']  # Define a list of emojis
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
     password = db.Column(db.String(150), nullable=False)
-    # email_reminders = db.Column(db.Boolean, default=False)
-    # email_new_articles = db.Column(db.Boolean, default=False)
-    # email_vote_results = db.Column(db.Boolean, default=False)
+    emoji = db.Column(db.String(20))  # New column to store user's emoji
 
 class Article(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     file_path = db.Column(db.String(150), nullable=False)
     votes = db.Column(db.Integer, default=0)
+    emoji_votes = db.Column(db.String, default='')  # New column to store emojis of voters
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+
 
 class SettingsForm(FlaskForm):
     # email_reminders = BooleanField('Receive email reminders for upcoming meetings')
@@ -104,8 +112,10 @@ def register():
     form = RegisterForm()
 
     if form.validate_on_submit():
-        hashed_password = generate_password_hash(form.password.data)  # Updated line
-        new_user = User(username=form.username.data, password=hashed_password)
+        hashed_password = generate_password_hash(form.password.data)
+        # Assign a random emoji from the list
+        assigned_emoji = random.choice(EMOJI_LIST)
+        new_user = User(username=form.username.data, password=hashed_password, emoji=assigned_emoji)
         db.session.add(new_user)
         db.session.commit()
         flash('Registration successful! You can now log in.')
@@ -140,10 +150,18 @@ def dashboard():
 @login_required
 def vote(article_id):
     article = Article.query.get_or_404(article_id)
-    article.votes += 1
-    db.session.commit()
-    flash('Vote cast successfully!')
+    
+    # Check if the current user's emoji is already in the vote list to prevent duplicate voting
+    if current_user.emoji not in article.emoji_votes:
+        article.votes += 1
+        article.emoji_votes += current_user.emoji  # Add user's emoji to the vote list
+        db.session.commit()
+        flash('Vote cast successfully!')
+    else:
+        flash('You have already voted for this article!')
+
     return redirect(url_for('index'))
+
 
 @app.route('/logout')
 @login_required

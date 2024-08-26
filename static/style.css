@@ -1,17 +1,31 @@
 body {
     background-color: #f8f9fa;
     color: #252525;
-    margin: 0; /* Ensure no default margin */
-    padding: 0; /* Ensure no default padding */
+    margin: 0;
+    padding: 0;
 }
 
 .navbar {
-    margin-bottom: 0; /* Remove margin below navbar */
+    margin-bottom: 0;
 }
 
 .cover-image {
-    margin: 0; /* Remove margin */
-    padding: 0; /* Remove padding */
+    margin: 0;
+    padding: 0;
+}
+
+.emoji-circle {
+    display: inline-block;
+    width: 100px;
+    height: 100px;
+    line-height: 100px;
+    font-size: 50px;
+    border-radius: 50%;
+    background-color: #e8e8e8;
+    color: #252525;
+    text-align: center;
+    vertical-align: middle;
+    margin-bottom: 20px;
 }
 
 .btn-outline-light {
