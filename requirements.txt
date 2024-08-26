@@ -91,8 +91,8 @@ pillow==10.4.0
 platformdirs==4.2.2
 proglog==0.1.10
 prompt_toolkit==3.0.47
-proto-plus==1.24.0
-protobuf~=3.20
+proto-plus~=1.24.0
+protobuf>=3.20.2,<5.0.0
 prov==2.0.1
 psutil==6.0.0
 ptyprocess==0.7.0
@@ -119,9 +119,9 @@ simplejson==3.19.2
 six==1.16.0
 SQLAlchemy==2.0.32
 stack-data==0.6.3
-tensorboard==2.16.2
+tensorboard~=2.16.2
 tensorboard-data-server==0.7.2
-tensorflow==2.16.2
+tensorflow~=2.16.2
 termcolor==2.4.0
 tornado==6.4.1
 tqdm==4.66.4
