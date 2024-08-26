@@ -1,14 +1,17 @@
 body {
     background-color: #f8f9fa;
     color: #252525;
+    margin: 0; /* Ensure no default margin */
+    padding: 0; /* Ensure no default padding */
 }
 
 .navbar {
-    margin-bottom: 20px;
+    margin-bottom: 0; /* Remove margin below navbar */
 }
 
 .cover-image {
-    margin-top: 20px;
+    margin: 0; /* Remove margin */
+    padding: 0; /* Remove padding */
 }
 
 .btn-outline-light {
