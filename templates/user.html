@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+    <title>User Profile</title>
+</head>
+<body>
+    <div class="container">
+        <h1 class="my-4">User Profile</h1>
+        <h2>Your Email Preferences</h2>
+        <ul class="list-group">
+            <li class="list-group-item">Email Reminders: {{ 'Enabled' if current_user.email_reminders else 'Disabled' }}</li>
+            <li class="list-group-item">New Article Notifications: {{ 'Enabled' if current_user.email_new_articles else 'Disabled' }}</li>
+            <li class="list-group-item">Vote Results Notifications: {{ 'Enabled' if current_user.email_vote_results else 'Disabled' }}</li>
+        </ul>
+        <h2 class="mt-4">Your Articles</h2>
+        <ul class="list-group">
+            {% for article in articles %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                {{ article.title }}
+                <span class="badge badge-primary badge-pill">{{ article.votes }} votes</span>
+                <a href="{{ url_for('vote', article_id=article.id) }}" class="btn btn-outline-primary btn-sm">👍</a>
+            </li>
+            {% endfor %}
+        </ul>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary mt-3">Back to Dashboard</a>
+    </div>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <a class="navbar-brand" href="{{ url_for('index') }}">Journal Club</a>
+        <div class="collapse navbar-collapse">
+            <ul class="navbar-nav mr-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('user') }}">User Profile</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('settings') }}">Settings</a>
+                </li>
+            </ul>
+        </div>
+    </nav>    
+</body>
+</html>

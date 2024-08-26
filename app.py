@@ -1,106 +1,162 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
-import firebase_admin
-from firebase_admin import credentials, auth, firestore
+from flask import Flask, render_template, redirect, url_for, request, flash
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_wtf import FlaskForm
+from firebase_admin import credentials, firestore, initialize_app
+from wtforms import StringField, PasswordField, BooleanField, FileField, SubmitField
+from wtforms.validators import InputRequired, Length, ValidationError
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
-from config import Config
+
+# Set up Firebase credentials using environment variables or a secure path
+firebase_cred_path = os.getenv('/Users/mariefrancine/Desktop/journal_club/secrets/journalclub-6a9bb-firebase-adminsdk-vqslj-2958062728.json')
+
+if firebase_cred_path:
+    cred = credentials.Certificate(firebase_cred_path)
+    initialize_app(cred)
+else:
+    print("Firebase credentials path not set. Please set the FIREBASE_CREDENTIALS_PATH environment variable.")
 
 app = Flask(__name__)
-app.config.from_object(Config)
+app.config['SECRET_KEY'] = 'thisisasecretkey'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
 
-# Initialize Firebase
-cred = credentials.Certificate("/Users/mariefrancine/Desktop/JC/journalclub-6a9bb-firebase-adminsdk-vqslj-34a110ae0f.json")
-firebase_admin.initialize_app(cred, {
-    'storageBucket': 'journalclub-6a9bb.appspot.com'
-})
-db = firestore.client()
-bucket = storage.bucket()
+db = SQLAlchemy(app)
 
-@app.route('/home')
-def home(): 
-    articles_ref = db.collection('articles')
-    articles = [doc.to_dict() for doc in articles_ref.stream()]
-    return render_template('home.html', articles=articles)
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
-@app.route('/vote/<string:article_id>', methods=['POST'])
-def vote(article_id):
-    user_id = request.form['user_id']  # Assuming you get the user ID from the session or form
-    vote_ref = db.collection('votes').document(f'{user_id}_{article_id}')
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(150), unique=True, nullable=False)
+    password = db.Column(db.String(150), nullable=False)
+    # email_reminders = db.Column(db.Boolean, default=False)
+    # email_new_articles = db.Column(db.Boolean, default=False)
+    # email_vote_results = db.Column(db.Boolean, default=False)
 
-    # Check if the user has already voted
-    if vote_ref.get().exists:
-        flash('You have already voted for this article!', 'warning')
-    else:
-        # Record the vote in Firestore
-        vote_ref.set({
-            'user_id': user_id,
-            'article_id': article_id,
-            'voted_at': datetime.datetime.now()
-        })
-        flash('Voted successfully!', 'success')
-    
-    return redirect(url_for('home'))
+class Article(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    file_path = db.Column(db.String(150), nullable=False)
+    votes = db.Column(db.Integer, default=0)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
 
-@app.route('/results')
-def results():
-    articles_ref = db.collection('articles')
-    articles = [doc.to_dict() for doc in articles_ref.stream()]
+class SettingsForm(FlaskForm):
+    # email_reminders = BooleanField('Receive email reminders for upcoming meetings')
+    # email_new_articles = BooleanField('Receive notifications for new articles')
+    # email_vote_results = BooleanField('Receive notifications when an article wins')
+    submit = SubmitField('Save Changes')
 
-    results = []
-    for article in articles:
-        votes_ref = db.collection('votes').where('article_id', '==', article['id'])
-        vote_count = len([v for v in votes_ref.stream()])
-        results.append({
-            'title': article['title'],
-            'vote_count': vote_count
-        })
+with app.app_context():
+    db.create_all()
 
-    return render_template('results.html', results=results)
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
-@app.route('/secure-page')
-def secure_page():
-    id_token = request.headers.get('Authorization').split(' ').pop()
-    try: 
-        decoded_token = auth.verify_id_token(id_token)
-        uid = decoded_token['uid']
-        return render_template('secure_page.html')
-    except Exception as e:
-        return jsonify({'message': 'Unauthorized'}), 401
+class LoginForm(FlaskForm):
+    username = StringField('Username', validators=[InputRequired(), Length(min=4, max=15)])
+    password = PasswordField('Password', validators=[InputRequired(), Length(min=8, max=80)])
+    remember = BooleanField('Remember me')
 
-@app.route('/login', methods=['POST'])
+class RegisterForm(FlaskForm):
+    username = StringField('Username', validators=[InputRequired(), Length(min=4, max=15)])
+    password = PasswordField('Password', validators=[InputRequired(), Length(min=8, max=80)])
+
+    def validate_username(self, username):
+        existing_user = User.query.filter_by(username=username.data).first()
+        if existing_user:
+            raise ValidationError('That username is taken. Please choose a different one.')
+
+class UploadForm(FlaskForm):
+    title = StringField('Article Title', validators=[InputRequired()])
+    file = FileField('Upload Article', validators=[InputRequired()])
+    submit = SubmitField('Upload')
+
+@app.route('/')
+def index():
+    articles = Article.query.all()
+    return render_template('index.html', articles=articles)
+
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    data = request.get_json()
-    token = data['idToken']
-    
-    try:
-        decoded_token = auth.verify_id_token(token)
-        uid = decoded_token['uid']
-        return jsonify({"message": "Login successful"}), 200
-    except:
-        return jsonify({"error": "Invalid token"}), 401
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.username.data).first()
+        if user and check_password_hash(user.password, form.password.data):
+            login_user(user, remember=form.remember.data)
+            return redirect(url_for('dashboard'))
+
+        flash('Invalid username or password')
+
+    return render_template('login.html', form=form)
+
+@app.route('/user')
+@login_required
+def user():
+    articles = Article.query.filter_by(user_id=current_user.id).all()
+    return render_template('user.html', articles=articles)
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    form = RegisterForm()
+
+    if form.validate_on_submit():
+        hashed_password = generate_password_hash(form.password.data)  # Updated line
+        new_user = User(username=form.username.data, password=hashed_password)
+        db.session.add(new_user)
+        db.session.commit()
+        flash('Registration successful! You can now log in.')
+        return redirect(url_for('login'))
+
+    return render_template('register.html', form=form)
+
+@app.route('/dashboard', methods=['GET', 'POST'])
+@login_required
+def dashboard():
+    form = UploadForm()
+    if form.validate_on_submit():
+        file = form.file.data
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        file.save(file_path)
+
+        new_article = Article(title=form.title.data, file_path=file_path, user_id=current_user.id)
+        db.session.add(new_article)
+        db.session.commit()
+        flash('Article uploaded successfully!')
+
+    articles = Article.query.all()
+    return render_template('dashboard.html', form=form, articles=articles)
+
+@app.route('/vote/<int:article_id>')
+@login_required
+def vote(article_id):
+    article = Article.query.get_or_404(article_id)
+    article.votes += 1
+    db.session.commit()
+    flash('Vote cast successfully!')
+    return redirect(url_for('index'))
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+
+@app.route('/settings', methods=['GET', 'POST'])
+@login_required
+def settings():
+    form = SettingsForm(obj=current_user)
+    if form.validate_on_submit():
+        # Update the user without the email fields
+        db.session.commit()
+        flash('Settings updated successfully!')
+        return redirect(url_for('settings'))
+    return render_template('settings.html', form=form)
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-@app.route('/upload', methods=['GET', 'POST'])
-def upload():
-    if request.method == 'POST':
-        title = request.form['title']
-        file = request.files['file']
-        
-        if file and title:
-            # Save the file to Firebase Storage
-            blob = bucket.blob(file.filename)
-            blob.upload_from_file(file, content_type=file.content_type)
-            file_url = blob.public_url
-            
-            # Save metadata to Firestore
-            article_ref = db.collection('articles').add({
-                'title': title,
-                'filename': file.filename,
-                'file_url': file_url,
-                'uploaded_at': datetime.datetime.now()
-            })
-            flash('Article uploaded successfully!', 'success')
-            return redirect(url_for('home'))
-    
-    return render_template('upload.html')

@@ -1,53 +1,36 @@
 body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 0;
-    background-color: #E7E7E7;
+    background-color: #e8e8e8;
+    color: #252525;
 }
+
 .navbar {
-    background-color: #252525 !important;
+    background-color: #65a8b0;
 }
+
 .navbar-brand, .nav-link {
-    color: #E7E7E7 !important;
+    color: #e8e8e8 !important;
 }
-.nav-link:hover {
-    color: #99CAC7 !important;
-}
-.jumbotron {
-    background: #B3C8BF;
-    padding: 2rem 1rem;
-}
-.list-group-item {
-    background-color: #5C9A99;
-    color: #E7E7E7;
-}
-.list-group-item a {
-    text-decoration: none;
-    color: #E7E7E7;
-}
-.list-group-item a:hover {
-    text-decoration: underline;
-}
+
 .btn-primary {
-    background-color: #5C9A99;
-    border-color: #5C9A99;
-}
-.btn-primary:hover {
-    background-color: #99CAC7;
-    border-color: #99CAC7;
-}
-.alert-success {
-    background-color: #99CAC7;
-    color: #252525;
-    border-color: #99CAC7;
-}
-.alert-danger {
-    background-color: #E7E7E7;
-    color: #252525;
-    border-color: #E7E7E7;
-}
-.navbar-brand img {
-    margin-right: 10px;
+    background-color: #628e7e;
+    border-color: #628e7e;
 }
 
+.btn-secondary {
+    background-color: #b3d9c0;
+    border-color: #b3d9c0;
+}
 
+.list-group-item {
+    background-color: #9bc6c1;
+    color: #252525;
+}
+
+.badge-primary {
+    background-color: #464646;
+    color: #e8e8e8;
+}
+
+.btn-outline-primary {
+        font-size: 1.5em;
+}
