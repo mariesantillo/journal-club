@@ -133,26 +133,28 @@ def dashboard():
     form = UploadForm()
     if form.validate_on_submit():
         file = form.file.data
-        blob = bucket.blob(f"uploads/{file.filename}")  # Create a blob in Firebase Storage
-        blob.upload_from_file(file)  # Upload the file
-        blob.make_public()  # Make the file publicly accessible
+        filename = file.filename
+        
+        # Upload the file to Firebase Storage
+        blob = bucket.blob(f"uploads/{filename}")
+        blob.upload_from_file(file, content_type=file.content_type)
 
-        # Create a document in the 'articles' collection
+        # Get the public URL of the uploaded file
+        file_url = blob.public_url
+
         article_data = {
             'title': form.title.data,
-            'file_url': blob.public_url,  # Store the public URL
-            'votes': 0,
+            'file_path': file_url,
             'emoji_votes': '',
-            'user_id': current_user.id,
-            'uploaded_at': firestore.SERVER_TIMESTAMP  # Add a timestamp
+            'user_id': current_user.id
         }
-
-        article_ref = db.collection('articles').document()  # Create a new document
-        article_ref.set(article_data)  # Set the document with article data
+        article_ref = db.collection('articles').document()
+        article_ref.set(article_data)
         flash('Article uploaded successfully!')
-
+        
     articles = db.collection('articles').stream()
     articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
+    
     return render_template('dashboard.html', form=form, articles=articles_list)
 
 @app.route('/vote/<article_id>')

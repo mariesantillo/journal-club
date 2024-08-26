@@ -1,39 +1,45 @@
-{% extends 'base.html' %}
-
+<!-- dashboard.html -->
+{% extends "base.html" %}
 {% block content %}
-<div class="container">
-    <h1 class="my-4">Dashboard</h1>
-    <h2>Upload a new article</h2>
-    <form method="POST" enctype="multipart/form-data">
-        {{ form.hidden_tag() }}
-        <div class="form-group">
-            {{ form.title.label(class="form-label") }}
-            {{ form.title(class="form-control", size=40) }}
-        </div>
-        <div class="form-group">
-            {{ form.file.label(class="form-label") }}
-            {{ form.file(class="form-control-file") }}
-        </div>
-        <button type="submit" class="btn btn-primary">Upload</button>
-    </form>
-    <h2 class="mt-4">Your Articles</h2>
-    <ul class="list-group">
-        {% for article in articles %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-            <div>
-                <strong>{{ article.title }}</strong>
-                <a href="{{ article.file_url }}" target="_blank">View PDF</a> <!-- Link to PDF -->
-                <div>
-                    {% for emoji in article.emoji_votes %}
-                        <span>{{ emoji }}</span> <!-- Show emojis of votes -->
-                    {% endfor %}
-                </div>
+    <div class="container">
+        <h1 class="my-4">Dashboard</h1>
+        <h2>Upload a new article</h2>
+        <form method="POST" enctype="multipart/form-data">
+            {{ form.hidden_tag() }}
+            <div class="form-group">
+                {{ form.title.label(class="form-label") }}
+                {{ form.title(class="form-control", size=40) }}
             </div>
-            <span class="badge badge-primary badge-pill">{{ article.votes }} votes</span>
-            <a href="{{ url_for('vote', article_id=article.id) }}" class="btn btn-sm btn-success">Vote</a>
-        </li>
-        {% endfor %}
-    </ul>
-    <a href="{{ url_for('logout') }}" class="btn btn-danger mt-4">Logout</a>
-</div>
+            <div class="form-group">
+                {{ form.file.label(class="form-label") }}
+                {{ form.file(class="form-control-file") }}
+            </div>
+            <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+        
+        <h2 class="mt-4">Your Articles</h2>
+        <ul class="list-group">
+            {% for article in articles %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <a href="{{ article.file_path }}" target="_blank">{{ article.title }}</a>
+                </div>
+                <div>
+                    <!-- Display emojis of users who voted -->
+                    {% for emoji in article.emoji_votes %}
+                        <span>{{ emoji }}</span>
+                    {% endfor %}
+                    
+                    <!-- Display the vote button if the user hasn't voted -->
+                    {% if current_user.emoji not in article.emoji_votes %}
+                        <a href="{{ url_for('vote', article_id=article.id) }}" class="btn btn-primary btn-sm">Vote</a>
+                    {% else %}
+                        <button class="btn btn-secondary btn-sm" disabled>Voted</button>
+                    {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        <a href="{{ url_for('logout') }}" class="btn btn-danger mt-4">Logout</a>
+    </div>
 {% endblock %}
