@@ -19,7 +19,12 @@ firebase_cred_json = os.getenv('FIREBASE_CREDENTIALS')
 if firebase_cred_json:
     cred_dict = json.loads(firebase_cred_json)
     cred = credentials.Certificate(cred_dict)
-    firebase_app = initialize_app(cred)  # Initialize Firebase app
+    
+    # Provide the storageBucket option when initializing the Firebase app
+    firebase_app = initialize_app(cred, {
+        'storageBucket': 'journalclub-6a9bb.appspot.com'  # Replace with your actual bucket name
+    })
+    
     db = firestore.client()  # Initialize Firestore client
     bucket = storage.bucket()  # Initialize Firebase Storage bucket
 else:
