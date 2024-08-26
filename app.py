@@ -119,7 +119,13 @@ def dashboard():
     form = UploadForm()
     if form.validate_on_submit():
         file = form.file.data
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        upload_folder = app.config['UPLOAD_FOLDER']
+
+        # Ensure the upload directory exists
+        if not os.path.exists(upload_folder):
+            os.makedirs(upload_folder)
+
+        file_path = os.path.join(upload_folder, file.filename)
         file.save(file_path)
 
         new_article = Article(title=form.title.data, file_path=file_path, user_id=current_user.id)
@@ -128,7 +134,7 @@ def dashboard():
         flash('Article uploaded successfully!')
 
     articles = Article.query.all()
-    return render_template('dashboard.html', form=form, articles=articles)
+    return render_template('dashboard.html', form=form, articles
 
 @app.route('/vote/<int:article_id>')
 @login_required
