@@ -5,7 +5,6 @@ from firebase_admin import credentials, firestore, initialize_app, storage
 from wtforms import StringField, PasswordField, BooleanField, FileField, SubmitField
 from wtforms.validators import InputRequired, Length, ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
 import os
 import json
 import random
@@ -14,16 +13,15 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'thisisasecretkey'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 
-bucket = storage.bucket()
-
 # Load Firebase credentials from environment variable
 firebase_cred_json = os.getenv('FIREBASE_CREDENTIALS')
 
 if firebase_cred_json:
     cred_dict = json.loads(firebase_cred_json)
     cred = credentials.Certificate(cred_dict)
-    initialize_app(cred)
+    firebase_app = initialize_app(cred)  # Initialize Firebase app
     db = firestore.client()  # Initialize Firestore client
+    bucket = storage.bucket()  # Initialize Firebase Storage bucket
 else:
     print("Firebase credentials not set. Please set the FIREBASE_CREDENTIALS environment variable.")
 
