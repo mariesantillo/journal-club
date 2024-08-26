@@ -7,8 +7,7 @@ from wtforms.validators import InputRequired, Length, ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import json
-import random 
-
+import random
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'thisisasecretkey'
@@ -29,13 +28,7 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-EMOJI_LIST = ['🦕', '🐹', '🐰', '🦊', '🐼', '🐷', '🐨', '🐝', '🐞', '🐥', '🐙', '🦭', '🦦', '🦔', '🐧', '🐯', '🫎', '🐢', '🐳', '🐮']  # Define a list of emojis
-
-# class User(UserMixin, db.Model):
-#     id = db.Column(db.Integer, primary_key=True)
-#     username = db.Column(db.String(150), unique=True, nullable=False)
-#     password = db.Column(db.String(150), nullable=False)
-#     emoji = db.Column(db.String(20))  # New column to store user's emoji
+EMOJI_LIST = ['🦕', '🐹', '🐰', '🦊', '🐼', '🐷', '🐨', '🐝', '🐞', '🐥', '🐙', '🦭', '🦦', '🦔', '🐧', '🐯', '🫎', '🐢', '🐳', '🐮']
 
 class User(UserMixin):
     def __init__(self, user_id, username, password, emoji):
@@ -44,22 +37,8 @@ class User(UserMixin):
         self.password = password
         self.emoji = emoji
 
-# class Article(db.Model):
-#     id = db.Column(db.Integer, primary_key=True)
-#     title = db.Column(db.String(150), nullable=False)
-#     file_path = db.Column(db.String(150), nullable=False)
-#     votes = db.Column(db.Integer, default=0)
-#     emoji_votes = db.Column(db.String, default='')  # New column to store emojis of voters
-#     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-
 class SettingsForm(FlaskForm):
-    # email_reminders = BooleanField('Receive email reminders for upcoming meetings')
-    # email_new_articles = BooleanField('Receive notifications for new articles')
-    # email_vote_results = BooleanField('Receive notifications when an article wins')
     submit = SubmitField('Save Changes')
-
-# with app.app_context():
-#     db.create_all()
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -79,8 +58,8 @@ class RegisterForm(FlaskForm):
     password = PasswordField('Password', validators=[InputRequired(), Length(min=8, max=80)])
 
     def validate_username(self, username):
-        existing_user = User.query.filter_by(username=username.data).first()
-        if existing_user:
+        user_ref = db.collection('users').document(username.data).get()
+        if user_ref.exists:
             raise ValidationError('That username is taken. Please choose a different one.')
 
 class UploadForm(FlaskForm):
@@ -90,8 +69,9 @@ class UploadForm(FlaskForm):
 
 @app.route('/')
 def index():
-    articles = Article.query.all()
-    return render_template('index.html', articles=articles)
+    articles = db.collection('articles').stream()
+    articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
+    return render_template('index.html', articles=articles_list)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -110,13 +90,13 @@ def login():
 @app.route('/user')
 @login_required
 def user():
-    articles = Article.query.filter_by(user_id=current_user.id).all()
-    return render_template('user.html', articles=articles)
+    articles = db.collection('articles').where('user_id', '==', current_user.id).stream()
+    articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
+    return render_template('user.html', articles=articles_list)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     form = RegisterForm()
-
     if form.validate_on_submit():
         hashed_password = generate_password_hash(form.password.data)
         assigned_emoji = random.choice(EMOJI_LIST)
@@ -125,8 +105,6 @@ def register():
             'password': hashed_password,
             'emoji': assigned_emoji
         }
-
-        # Save user data to Firestore
         user_ref = db.collection('users').document(form.username.data)
         if user_ref.get().exists:
             flash('Username already taken. Please choose a different one.')
@@ -134,7 +112,6 @@ def register():
             user_ref.set(user_data)
             flash('Registration successful! You can now log in.')
             return redirect(url_for('login'))
-
     return render_template('register.html', form=form)
 
 @app.route('/dashboard', methods=['GET', 'POST'])
@@ -145,7 +122,6 @@ def dashboard():
         file = form.file.data
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
         file.save(file_path)
-
         article_data = {
             'title': form.title.data,
             'file_path': file_path,
@@ -153,17 +129,11 @@ def dashboard():
             'emoji_votes': '',
             'user_id': current_user.id
         }
-
-        # Save article data to Firestore
         article_ref = db.collection('articles').document()
         article_ref.set(article_data)
-
         flash('Article uploaded successfully!')
-
-    # Fetch all articles from Firestore
     articles = db.collection('articles').stream()
     articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
-
     return render_template('dashboard.html', form=form, articles=articles_list)
 
 @app.route('/vote/<article_id>')
@@ -171,7 +141,6 @@ def dashboard():
 def vote(article_id):
     article_ref = db.collection('articles').document(article_id)
     article = article_ref.get()
-
     if article.exists:
         article_data = article.to_dict()
         if current_user.emoji not in article_data['emoji_votes']:
@@ -183,10 +152,7 @@ def vote(article_id):
             flash('You have already voted for this article!')
     else:
         flash('Article not found.')
-
     return redirect(url_for('index'))
-
-
 
 @app.route('/logout')
 @login_required
@@ -199,13 +165,9 @@ def logout():
 def settings():
     form = SettingsForm(obj=current_user)
     if form.validate_on_submit():
-        # Update the user without the email fields
-        db.session.commit()
         flash('Settings updated successfully!')
         return redirect(url_for('settings'))
     return render_template('settings.html', form=form)
-
-
 
 if __name__ == '__main__':
     app.run(debug=True)
