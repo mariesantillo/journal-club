@@ -84,8 +84,12 @@ def login():
             if check_password_hash(user.password, form.password.data):
                 login_user(user, remember=form.remember.data)
                 return redirect(url_for('dashboard'))
-        flash('Invalid username or password')
+            else:
+                flash('Invalid password')
+        else:
+            flash('Invalid username')
     return render_template('login.html', form=form)
+
 
 @app.route('/user')
 @login_required
@@ -111,7 +115,7 @@ def register():
         else:
             user_ref.set(user_data)
             flash('Registration successful! You can now log in.')
-            return redirect(url_for('login'))
+            return redirect(url_for('login'))  # Redirect to login page after registration
     return render_template('register.html', form=form)
 
 @app.route('/dashboard', methods=['GET', 'POST'])
