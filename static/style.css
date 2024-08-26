@@ -7,8 +7,10 @@ body {
 }
 
 .cover-container {
-    text-align: center;
-    margin-bottom: 20px;
+    width: 100%;
+    max-height: 300px; /* Adjust this height to your preference */
+    overflow: hidden; /* Ensures any overflow is hidden */
+    margin-bottom: 20px; /* Adds some space below the image */
 }
 
 .navbar {
@@ -16,8 +18,9 @@ body {
 }
 
 .cover-image {
-    margin: 0;
-    padding: 0;
+    width: 100%;
+    height: auto; /* Maintains the aspect ratio */
+    object-fit: cover; /* Ensures the image covers the container without stretching */
 }
 
 .container {
