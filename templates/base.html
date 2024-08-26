@@ -1,23 +1,25 @@
 <!doctype html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Journal Club{% endblock %}</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <a class="navbar-brand" href="{{ url_for('index') }}">Journal Club</a>
-        <div class="collapse navbar-collapse">
-            <ul class="navbar-nav ml-auto">
-                {% if current_user.is_authenticated %}
+
+<!-- Navigation Bar -->
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <a class="navbar-brand" href="{{ url_for('index') }}">Journal Club</a>
+    <div class="collapse navbar-collapse">
+        <ul class="navbar-nav mr-auto">
+            {% if current_user.is_authenticated %}
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('user') }}">Profile</a>
+                    <a class="nav-link" href="{{ url_for('user') }}">User Profile</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('settings') }}">Settings</a>
@@ -25,26 +27,27 @@
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
                 </li>
-                {% else %}
+            {% else %}
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('login') }}">Login</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('register') }}">Register</a>
                 </li>
-                {% endif %}
-            </ul>
-        </div>
-    </nav>
-
-    <div class="cover-image" style="background-image: url('{{ url_for('static', filename='cover.png') }}'); height: 300px; background-size: cover; background-position: center;"></div>
-
-    <div class="container mt-4">
-        {% block content %}
-        <!-- Content goes here -->
-        {% endblock %}
+            {% endif %}
+        </ul>
     </div>
-    
+</nav>
+
+<!-- Cover Picture -->
+<div class="cover-container">
+    <img src="{{ url_for('static', filename='cover.png') }}" alt="Cover Picture" class="cover-image">
+</div>
+
+<div class="container mt-4">
+    {% block content %}
+    {% endblock %}
+</div>
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>

@@ -124,8 +124,15 @@ def dashboard():
     form = UploadForm()
     if form.validate_on_submit():
         file = form.file.data
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        upload_folder = app.config['UPLOAD_FOLDER']
+
+        # Check if the directory exists; if not, create it
+        if not os.path.exists(upload_folder):
+            os.makedirs(upload_folder)
+
+        file_path = os.path.join(upload_folder, file.filename)
         file.save(file_path)
+
         article_data = {
             'title': form.title.data,
             'file_path': file_path,
@@ -136,6 +143,7 @@ def dashboard():
         article_ref = db.collection('articles').document()
         article_ref.set(article_data)
         flash('Article uploaded successfully!')
+
     articles = db.collection('articles').stream()
     articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
     return render_template('dashboard.html', form=form, articles=articles_list)
