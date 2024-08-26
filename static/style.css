@@ -1,36 +1,34 @@
 body {
-    background-color: #e8e8e8;
+    background-color: #f8f9fa;
     color: #252525;
 }
 
 .navbar {
-    background-color: #65a8b0;
+    margin-bottom: 20px;
 }
 
-.navbar-brand, .nav-link {
-    color: #e8e8e8 !important;
+.cover-image {
+    margin-top: 20px;
 }
 
-.btn-primary {
-    background-color: #628e7e;
-    border-color: #628e7e;
+.btn-outline-light {
+    margin-left: 10px;
 }
 
-.btn-secondary {
-    background-color: #b3d9c0;
-    border-color: #b3d9c0;
+h1, h2 {
+    color: #343a40;
+}
+
+.container {
+    margin-top: 20px;
 }
 
 .list-group-item {
-    background-color: #9bc6c1;
-    color: #252525;
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
 }
 
 .badge-primary {
     background-color: #464646;
     color: #e8e8e8;
-}
-
-.btn-outline-primary {
-        font-size: 1.5em;
 }
