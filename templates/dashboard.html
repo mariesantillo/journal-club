@@ -18,18 +18,16 @@
         </div>
         <button type="submit" class="btn btn-success">Upload</button>
     </form>
+
     <h2 class="mt-4">Your Articles</h2>
     <ul class="list-group">
         {% for article in articles %}
         <li class="list-group-item d-flex justify-content-between align-items-center">
-            {{ article.title }}
+            {{ article['title'] }}
             <div>
-                <span class="badge badge-primary badge-pill">{{ article.votes }} votes</span>
-                <!-- Display emojis of voters -->
-                <span>{{ article.emoji_votes }}</span>
+                <span class="badge badge-primary badge-pill">{{ article['votes'] }} votes</span>
+                <span>{{ article['emoji_votes'] }}</span>
             </div>
         </li>
         {% endfor %}
     </ul>
-</div>
-{% endblock %}
