@@ -134,7 +134,7 @@ def dashboard():
         flash('Article uploaded successfully!')
 
     articles = Article.query.all()
-    return render_template('dashboard.html', form=form, articles
+    return render_template('dashboard.html', form=form, articles)
 
 @app.route('/vote/<int:article_id>')
 @login_required
