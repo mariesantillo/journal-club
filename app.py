@@ -201,7 +201,7 @@ def upload_article():
                 'votes': 0,
                 'emoji_votes': '',
                 'user_id': current_user.id,
-                'uploaded_by': current_user.username
+                'uploaded_by': current_user.username,
                 'voting_month': datetime.now().strftime('%Y-%m'),  # Ensure this is a string
                 'voted_users': [],  
                 'voting_deadline': datetime.now()  # Ensure this is a DateTime object
