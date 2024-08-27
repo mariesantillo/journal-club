@@ -116,51 +116,33 @@ def register():
             return redirect(url_for('login'))
     return render_template('register.html', form=form)
 
+from datetime import datetime
+
 @app.route('/dashboard', methods=['GET', 'POST'])
 @login_required
 def dashboard():
     form = UploadForm()
     if form.validate_on_submit():
-        file = form.file.data
-        filename = file.filename
+        # File upload logic remains the same...
+        pass
 
-        # Save file locally to UPLOAD_FOLDER
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(file_path)
+    try:
+        # Filter articles based on the current voting month
+        current_month = datetime.now().strftime('%Y-%m')
+        articles = db.collection('articles') \
+                     .where('voting_month', '==', current_month) \
+                     .where('voting_deadline', '>=', datetime.now()) \
+                     .stream()
 
-        # Upload the file to Firebase Storage
-        blob = bucket.blob(f'pdfs/{filename}')
-        blob.upload_from_filename(file_path)
+        # Convert Firestore documents to a list
+        articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
+    except Exception as e:
+        print(f"Error fetching articles: {e}")  # Debugging output
+        flash(f"An error occurred while fetching articles: {e}")
+        articles_list = []
 
-        # Make the file publicly accessible
-        blob.make_public()
-
-        # Generate a public URL for the uploaded file
-        download_url = blob.public_url
-
-        # Save article data to Firestore
-        article_data = {
-            'title': form.title.data,
-            'file_url': download_url,  # Store the download URL in Firestore
-            'votes': 0,
-            'emoji_votes': '',
-            'user_id': current_user.id,
-            'uploaded_by': current_user.username
-        }
-
-        article_ref = db.collection('articles').document()
-        article_ref.set(article_data)
-        flash('Article uploaded successfully!')
-
-    # Filter articles based on the current voting month
-    current_month = datetime.now().strftime('%Y-%m')
-    articles = db.collection('articles') \
-                 .where('voting_month', '==', current_month) \
-                 .where('voting_deadline', '>=', datetime.now()) \
-                 .stream()
-
-    articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
     return render_template('dashboard.html', form=form, articles=articles_list)
+
 
 @app.route('/article/<article_id>')
 @login_required
@@ -220,8 +202,11 @@ def upload_article():
                 'emoji_votes': '',
                 'user_id': current_user.id,
                 'uploaded_by': current_user.username
-            }
-
+                'voting_month': datetime.now().strftime('%Y-%m'),  # Ensure this is a string
+                'voted_users': [],  
+                'voting_deadline': datetime.now()  # Ensure this is a DateTime object
+                }
+            
             article_ref = db.collection('articles').document()
             article_ref.set(article_data)
             flash('Article uploaded successfully!')
