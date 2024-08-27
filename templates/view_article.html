@@ -2,22 +2,10 @@
 
 {% block content %}
 <div class="container mt-5">
-    <h1>{{ article.title }}</h1>
-    <div class="embed-responsive embed-responsive-16by9">
-        <iframe class="embed-responsive-item" src="{{ article.file_url }}" allowfullscreen></iframe>
-    </div>
-    <div class="mt-4">
-        <h3>Votes</h3>
-        <p>
-            {% for emoji in article.emoji_votes %}
-                <span>{{ emoji }}</span>
-            {% endfor %}
-        </p>
-        {% if not user_has_voted %}
-            <a href="{{ url_for('vote', article_id=article.id) }}" class="btn btn-primary">Vote for this article</a>
-        {% else %}
-            <p>You have already voted for this article.</p>
-        {% endif %}
-    </div>
+    <h1>{{ article['title'] }}</h1>
+    <p>Uploaded by: {{ article['uploaded_by'] }}</p>
+    
+    <!-- Embed PDF -->
+    <iframe src="{{ article['file_url'] }}" width="100%" height="600px"></iframe>
 </div>
 {% endblock %}

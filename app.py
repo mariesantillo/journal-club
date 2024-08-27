@@ -129,40 +129,44 @@ def dashboard():
     form = UploadForm()
     if form.validate_on_submit():
         file = form.file.data
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        filename = file.filename
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
+        
+        # Upload the file to Firebase Storage
+        blob = bucket.blob(f'pdfs/{filename}')
+        blob.upload_from_filename(file_path)
+        download_url = blob.generate_signed_url(timedelta(minutes=30)) # Adjust time as needed
+        
+        # Save article data to Firestore
         article_data = {
             'title': form.title.data,
-            'file_url': file_path,
+            'file_url': download_url,
             'votes': 0,
             'emoji_votes': '',
             'user_id': current_user.id,
-            'uploaded_by': current_user.username  # Add uploader info here
+            'uploaded_by': current_user.username  # Correct uploader info here
         }
         article_ref = db.collection('articles').document()
         article_ref.set(article_data)
         flash('Article uploaded successfully!')
-    
+
     articles = db.collection('articles').stream()
     articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
     return render_template('dashboard.html', form=form, articles=articles_list)
-
 
 @app.route('/article/<article_id>')
 @login_required
 def view_article(article_id):
     article_ref = db.collection('articles').document(article_id)
     article = article_ref.get()
-
-    if not article.exists:
-        return "Article not found", 404
-
-    article_data = article.to_dict()
-
-    user_has_voted = current_user.emoji in article_data.get('emoji_votes', '')
-
-    return render_template('view_article.html', article=article_data, user_has_voted=user_has_voted)
-
+    
+    if article.exists:
+        article_data = article.to_dict()
+        return render_template('view_article.html', article=article_data)
+    else:
+        flash('Article not found.')
+        return redirect(url_for('dashboard'))
 
 @app.route('/vote/<article_id>')
 @login_required
@@ -185,6 +189,24 @@ def vote(article_id):
     else:
         flash('Article not found.')
     return redirect(url_for('index'))
+
+@app.route('/delete_article/<article_id>')
+@login_required
+def delete_article(article_id):
+    article_ref = db.collection('articles').document(article_id)
+    article = article_ref.get()
+    
+    if article.exists:
+        article_data = article.to_dict()
+        if article_data['uploaded_by'] == current_user.username:
+            article_ref.delete()
+            flash('Article deleted successfully!')
+        else:
+            flash('You do not have permission to delete this article.')
+    else:
+        flash('Article not found.')
+    
+    return redirect(url_for('dashboard'))
 
 @app.route('/logout')
 @login_required
