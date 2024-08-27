@@ -139,11 +139,11 @@ def dashboard():
         blob = bucket.blob(f'pdfs/{filename}')
         blob.upload_from_filename(file_path)
 
+        # Make the file publicly accessible
+        blob.make_public()
+
         # Generate a public URL for the uploaded file
         download_url = blob.public_url
-
-        # Debugging: Print the download URL
-        print(f"Download URL: {download_url}")
 
         # Save article data to Firestore
         article_data = {
