@@ -166,6 +166,15 @@ def view_article(article_id):
         flash('Article not found.')
         return redirect(url_for('dashboard'))
 
+@app.route('/meetings')
+@login_required
+def meetings():
+    # Fetch meetings from the database (Firestore)
+    meetings_ref = db.collection('meetings').stream()
+    meetings_list = [{'id': meeting.id, **meeting.to_dict()} for meeting in meetings_ref]
+    
+    return render_template('meetings.html', meetings=meetings_list)
+
 @app.route('/delete_article/<article_id>', methods=['POST'])
 @login_required
 def delete_article(article_id):
