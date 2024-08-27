@@ -176,38 +176,55 @@ def view_article(article_id):
 def upload_article():
     form = UploadForm()
     if form.validate_on_submit():
-        file = form.file.data
-        filename = file.filename
+        try:
+            file = form.file.data
+            filename = file.filename
 
-        # Save file locally to UPLOAD_FOLDER
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(file_path)
+            # Ensure the upload directory exists
+            upload_folder = app.config['UPLOAD_FOLDER']
+            if not os.path.exists(upload_folder):
+                os.makedirs(upload_folder)
+                print(f"Created upload directory at {upload_folder}")
 
-        # Upload the file to Firebase Storage
-        blob = bucket.blob(f'pdfs/{filename}')
-        blob.upload_from_filename(file_path)
+            # Save file locally to UPLOAD_FOLDER
+            file_path = os.path.join(upload_folder, filename)
+            file.save(file_path)
 
-        # Make the file publicly accessible
-        blob.make_public()
+            print(f"File saved locally at {file_path}")
 
-        # Generate a public URL for the uploaded file
-        download_url = blob.public_url
+            # Upload the file to Firebase Storage
+            blob = bucket.blob(f'pdfs/{filename}')
+            blob.upload_from_filename(file_path)
 
-        # Save article data to Firestore
-        article_data = {
-            'title': form.title.data,
-            'file_url': download_url,  # Store the download URL in Firestore
-            'votes': 0,
-            'emoji_votes': '',
-            'user_id': current_user.id,
-            'uploaded_by': current_user.username
-        }
+            print(f"File uploaded to Firebase Storage as pdfs/{filename}")
 
-        article_ref = db.collection('articles').document()
-        article_ref.set(article_data)
-        flash('Article uploaded successfully!')
-        return redirect(url_for('dashboard'))
+            # Make the file publicly accessible
+            blob.make_public()
 
+            # Generate a public URL for the uploaded file
+            download_url = blob.public_url
+            print(f"File public URL: {download_url}")
+
+            # Save article data to Firestore
+            article_data = {
+                'title': form.title.data,
+                'file_url': download_url,  # Store the download URL in Firestore
+                'votes': 0,
+                'emoji_votes': '',
+                'user_id': current_user.id,
+                'uploaded_by': current_user.username
+            }
+
+            article_ref = db.collection('articles').document()
+            article_ref.set(article_data)
+            flash('Article uploaded successfully!')
+            return redirect(url_for('dashboard'))
+
+        except Exception as e:
+            flash(f"An error occurred during the upload: {str(e)}")
+            print(f"Error during file upload: {str(e)}")  # Debugging statement
+
+    # Fetch articles to display in the template
     articles = db.collection('articles').stream()
     articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
     return render_template('upload_article.html', form=form, articles=articles_list)

@@ -1,24 +1,23 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Upload Article</title>
-</head>
-<body>
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
     <h1>Upload New Article</h1>
     <form method="POST" enctype="multipart/form-data">
         {{ form.hidden_tag() }}
-        <div>
-            {{ form.title.label }} {{ form.title(size=32) }}
+        <div class="form-group">
+            {{ form.title.label }} 
+            {{ form.title(class="form-control", size=32) }}
         </div>
-        <div>
-            {{ form.file.label }} {{ form.file() }}
+        <div class="form-group">
+            {{ form.file.label }} 
+            {{ form.file(class="form-control-file") }}
         </div>
-        <div>
+        <div class="form-group">
             {{ form.submit(class="btn btn-primary") }}
         </div>
     </form>
 
-    <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
-</body>
-</html>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+</div>
+{% endblock %}
