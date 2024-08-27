@@ -3,9 +3,12 @@
 {% block content %}
 <div class="container mt-5">
     <h1>{{ article['title'] }}</h1>
-    <p>Uploaded by: {{ article['uploaded_by'] }}</p>
+    <p>Uploaded by: {{ article.get('uploaded_by', 'Unknown') }}</p>
     
-    <!-- Embed PDF -->
-    <iframe src="{{ article['file_url'] }}" width="100%" height="600px"></iframe>
+    <!-- Embed the PDF -->
+    <iframe src="{{ article['file_url'] }}" width="100%" height="800px"></iframe>
+    
+    <!-- Add option to download the PDF -->
+    <a href="{{ article['file_url'] }}" class="btn btn-primary mt-3" target="_blank">Download PDF</a>
 </div>
 {% endblock %}

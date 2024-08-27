@@ -130,23 +130,31 @@ def dashboard():
     if form.validate_on_submit():
         file = form.file.data
         filename = file.filename
+
+        # Save file locally to UPLOAD_FOLDER
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
-        
+
         # Upload the file to Firebase Storage
         blob = bucket.blob(f'pdfs/{filename}')
         blob.upload_from_filename(file_path)
-        download_url = blob.generate_signed_url(timedelta(minutes=30)) # Adjust time as needed
-        
+
+        # Generate a public URL for the uploaded file
+        download_url = blob.public_url
+
+        # Debugging: Print the download URL
+        print(f"Download URL: {download_url}")
+
         # Save article data to Firestore
         article_data = {
             'title': form.title.data,
-            'file_url': download_url,
+            'file_url': download_url,  # Store the download URL in Firestore
             'votes': 0,
             'emoji_votes': '',
             'user_id': current_user.id,
-            'uploaded_by': current_user.username  # Correct uploader info here
+            'uploaded_by': current_user.username
         }
+
         article_ref = db.collection('articles').document()
         article_ref.set(article_data)
         flash('Article uploaded successfully!')
@@ -190,22 +198,30 @@ def vote(article_id):
         flash('Article not found.')
     return redirect(url_for('index'))
 
-@app.route('/delete_article/<article_id>')
+@app.route('/delete_article/<article_id>', methods=['POST'])
 @login_required
 def delete_article(article_id):
+    # Fetch the article from Firestore
     article_ref = db.collection('articles').document(article_id)
     article = article_ref.get()
     
     if article.exists:
         article_data = article.to_dict()
-        if article_data['uploaded_by'] == current_user.username:
+        if article_data.get('uploaded_by') == current_user.username:
+            # Delete the article from Firestore
             article_ref.delete()
+
+            # Also delete the file from Firebase Storage
+            file_name = article_data['file_url'].split('/')[-1]
+            blob = bucket.blob(f'pdfs/{file_name}')
+            blob.delete()
+
             flash('Article deleted successfully!')
         else:
-            flash('You do not have permission to delete this article.')
+            flash('You are not authorized to delete this article.')
     else:
         flash('Article not found.')
-    
+
     return redirect(url_for('dashboard'))
 
 @app.route('/logout')
