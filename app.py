@@ -20,7 +20,7 @@ firebase_cred_json = os.getenv('FIREBASE_CREDENTIALS')
 if firebase_cred_json:
     cred_dict = json.loads(firebase_cred_json)
     cred = credentials.Certificate(cred_dict)
-    firebase_app = initialize_app(cred, {'storageBucket': 'YOUR_PROJECT_ID.appspot.com'})
+    firebase_app = initialize_app(cred, {'storageBucket': 'journalclub-6a9bb.appspot.com'})
     db = firestore.client()  # Initialize Firestore client
     bucket = storage.bucket()  # Initialize Firebase Storage bucket
 else:
@@ -123,8 +123,6 @@ def register():
             return redirect(url_for('login'))  # Redirect to login page after registration
     return render_template('register.html', form=form)
 
-@app.route('/dashboard', methods=['GET', 'POST'])
-@login_required
 @app.route('/dashboard', methods=['GET', 'POST'])
 @login_required
 def dashboard():
