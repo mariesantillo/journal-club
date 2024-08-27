@@ -161,7 +161,12 @@ def view_article(article_id):
     article_ref = db.collection('articles').document(article_id).get()
     if article_ref.exists:
         article_data = article_ref.to_dict()
-        return render_template('view_article.html', article=article_data)
+        
+        # Check if the article has a PDF file associated with it
+        pdf_url = article_data.get('file_url', None)
+        
+        # Render the article page with an embedded PDF viewer and download link
+        return render_template('view_article.html', article=article_data, pdf_url=pdf_url)
     else:
         flash('Article not found.')
         return redirect(url_for('dashboard'))

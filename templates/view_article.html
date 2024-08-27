@@ -1,23 +1,27 @@
-{% extends 'base.html' %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ article['title'] }}</title>
+</head>
+<body>
+    <h1>{{ article['title'] }}</h1>
+    <p>Uploaded by: {{ article['uploaded_by'] }}</p>
 
-{% block content %}
-<div class="container">
-    <h2>{{ article['title'] }}</h2>
-    <p><strong>Uploaded by:</strong> {{ article['uploaded_by'] }}</p>
+    {% if pdf_url %}
+        <h2>View Article</h2>
+        <!-- Embed PDF in the page -->
+        <iframe src="{{ pdf_url }}" width="100%" height="600px">
+            Your browser does not support iframes.
+        </iframe>
 
-    <!-- Embed PDF using iframe -->
-    <iframe src="{{ article['file_url'] }}" width="100%" height="500px"></iframe>
-
-    <!-- OR provide a link to view/download the PDF -->
-    <p>
-        <a href="{{ article['file_url'] }}" target="_blank">View or Download PDF</a>
-    </p>
-
-    <!-- Optional delete button for the user who uploaded the article -->
-    {% if current_user.username == article['uploaded_by'] %}
-    <form action="{{ url_for('delete_article', article_id=article['id']) }}" method="post">
-        <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this article?');">Delete Article</button>
-    </form>
+        <h2>Download Article</h2>
+        <!-- Provide a download link -->
+        <a href="{{ pdf_url }}" download>Download PDF</a>
+    {% else %}
+        <p>No PDF available for this article.</p>
     {% endif %}
-</div>
-{% endblock %}
+
+    <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+</body>
+</html>
