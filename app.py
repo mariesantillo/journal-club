@@ -1,4 +1,6 @@
-from flask import Flask, render_template, redirect, url_for, request, flash
+
+Copy code
+from flask import Flask, render_template, redirect, url_for, request, flash, send_file
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf import FlaskForm
 from firebase_admin import credentials, firestore, initialize_app, storage
@@ -8,6 +10,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import json
 import random
+import io
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'thisisasecretkey'
@@ -19,12 +22,7 @@ firebase_cred_json = os.getenv('FIREBASE_CREDENTIALS')
 if firebase_cred_json:
     cred_dict = json.loads(firebase_cred_json)
     cred = credentials.Certificate(cred_dict)
-    
-    # Provide the storageBucket option when initializing the Firebase app
-    firebase_app = initialize_app(cred, {
-        'storageBucket': 'journalclub-6a9bb.appspot.com'  # Replace with your actual bucket name
-    })
-    
+    firebase_app = initialize_app(cred, {'storageBucket': 'YOUR_PROJECT_ID.appspot.com'})
     db = firestore.client()  # Initialize Firestore client
     bucket = storage.bucket()  # Initialize Firebase Storage bucket
 else:
@@ -129,36 +127,42 @@ def register():
 
 @app.route('/dashboard', methods=['GET', 'POST'])
 @login_required
+@app.route('/dashboard', methods=['GET', 'POST'])
+@login_required
 def dashboard():
     form = UploadForm()
     if form.validate_on_submit():
         file = form.file.data
-        filename = file.filename
+        blob = bucket.blob('pdfs/' + file.filename)
+        blob.upload_from_file(file)
+        file_url = blob.public_url
         
-        # Upload the file to Firebase Storage
-        blob = bucket.blob(f"uploads/{filename}")
-        blob.upload_from_file(file, content_type=file.content_type)
-
-        # Generate a signed URL or use the public URL depending on your Firebase Storage settings
-        file_url = blob.generate_signed_url(expiration=datetime.timedelta(days=7))  # URL valid for 7 days
-        
-        # Alternatively, for a public URL (if bucket settings allow public access)
-        # file_url = blob.public_url
         article_data = {
             'title': form.title.data,
-            'file_path': file_url,  # Adjust this line as necessary
-            'votes': 0,  # Ensure this is an integer
+            'file_path': file_url,
+            'votes': 0,
             'emoji_votes': '',
             'user_id': current_user.id
         }
         article_ref = db.collection('articles').document()
         article_ref.set(article_data)
         flash('Article uploaded successfully!')
-        
+    
     articles = db.collection('articles').stream()
     articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
-    
     return render_template('dashboard.html', form=form, articles=articles_list)
+
+@app.route('/article/<article_id>')
+@login_required
+def view_article(article_id):
+    article_ref = db.collection('articles').document(article_id)
+    article = article_ref.get()
+    if article.exists:
+        article_data = article.to_dict()
+        return render_template('view_article.html', article=article_data)
+    else:
+        flash('Article not found.')
+        return redirect(url_for('dashboard'))
 
 @app.route('/vote/<article_id>')
 @login_required
@@ -168,7 +172,7 @@ def vote(article_id):
     if article.exists:
         article_data = article.to_dict()
 
-        # Convert 'votes' to an integer if it's not already
+        # Ensure votes are handled as integers
         article_data['votes'] = int(article_data['votes'])
 
         if current_user.emoji not in article_data['emoji_votes']:
