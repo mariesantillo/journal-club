@@ -129,16 +129,15 @@ def dashboard():
     form = UploadForm()
     if form.validate_on_submit():
         file = form.file.data
-        blob = bucket.blob('pdfs/' + file.filename)
-        blob.upload_from_file(file)
-        file_url = blob.public_url
-        
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        file.save(file_path)
         article_data = {
             'title': form.title.data,
-            'file_path': file_url,
+            'file_url': file_path,
             'votes': 0,
             'emoji_votes': '',
-            'user_id': current_user.id
+            'user_id': current_user.id,
+            'uploaded_by': current_user.username  # Add uploader info here
         }
         article_ref = db.collection('articles').document()
         article_ref.set(article_data)
@@ -148,17 +147,22 @@ def dashboard():
     articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
     return render_template('dashboard.html', form=form, articles=articles_list)
 
+
 @app.route('/article/<article_id>')
 @login_required
 def view_article(article_id):
     article_ref = db.collection('articles').document(article_id)
     article = article_ref.get()
-    if article.exists:
-        article_data = article.to_dict()
-        return render_template('view_article.html', article=article_data)
-    else:
-        flash('Article not found.')
-        return redirect(url_for('dashboard'))
+
+    if not article.exists:
+        return "Article not found", 404
+
+    article_data = article.to_dict()
+
+    user_has_voted = current_user.emoji in article_data.get('emoji_votes', '')
+
+    return render_template('view_article.html', article=article_data, user_has_voted=user_has_voted)
+
 
 @app.route('/vote/<article_id>')
 @login_required
