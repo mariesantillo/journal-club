@@ -225,6 +225,25 @@ def logout():
     logout_user()
     return redirect(url_for('index'))
 
+@app.route('/add_meeting', methods=['GET', 'POST'])
+@login_required
+def add_meeting():
+    if request.method == 'POST':
+        # Logic for adding a new meeting
+        # Fetch data from the form, save to Firestore, etc.
+        meeting_data = {
+            'title': request.form['title'],
+            'description': request.form['description'],
+            'date': request.form['date'],
+            # Add other fields as necessary
+        }
+        meetings_ref = db.collection('meetings').document()
+        meetings_ref.set(meeting_data)
+        flash('Meeting added successfully!')
+        return redirect(url_for('meetings'))
+    
+    return render_template('add_meeting.html')  # Create this template for adding meetings
+
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
