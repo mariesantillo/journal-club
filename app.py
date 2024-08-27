@@ -171,6 +171,47 @@ def view_article(article_id):
         flash('Article not found.')
         return redirect(url_for('dashboard'))
 
+@app.route('/upload_article', methods=['GET', 'POST'])
+@login_required
+def upload_article():
+    form = UploadForm()
+    if form.validate_on_submit():
+        file = form.file.data
+        filename = file.filename
+
+        # Save file locally to UPLOAD_FOLDER
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+
+        # Upload the file to Firebase Storage
+        blob = bucket.blob(f'pdfs/{filename}')
+        blob.upload_from_filename(file_path)
+
+        # Make the file publicly accessible
+        blob.make_public()
+
+        # Generate a public URL for the uploaded file
+        download_url = blob.public_url
+
+        # Save article data to Firestore
+        article_data = {
+            'title': form.title.data,
+            'file_url': download_url,  # Store the download URL in Firestore
+            'votes': 0,
+            'emoji_votes': '',
+            'user_id': current_user.id,
+            'uploaded_by': current_user.username
+        }
+
+        article_ref = db.collection('articles').document()
+        article_ref.set(article_data)
+        flash('Article uploaded successfully!')
+        return redirect(url_for('dashboard'))
+
+    articles = db.collection('articles').stream()
+    articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
+    return render_template('upload_article.html', form=form, articles=articles_list)
+
 @app.route('/meetings')
 @login_required
 def meetings():
@@ -188,9 +229,19 @@ def delete_article(article_id):
     if article.exists:
         article_data = article.to_dict()
         if article_data['user_id'] == current_user.id:
-            # Delete file from Firebase Storage
-            blob = bucket.blob(f"pdfs/{article_data['file_url'].split('/')[-1]}")
-            blob.delete()
+            # Check if 'file_url' exists in article data
+            if 'file_url' in article_data and article_data['file_url']:
+                try:
+                    # Extract filename from file_url
+                    filename = article_data['file_url'].split('/')[-1]
+
+                    # Delete file from Firebase Storage
+                    blob = bucket.blob(f"pdfs/{filename}")
+                    blob.delete()
+                except Exception as e:
+                    flash(f"Error deleting file from storage: {str(e)}")
+            else:
+                flash('No file associated with this article.')
 
             # Delete article data from Firestore
             article_ref.delete()
@@ -200,6 +251,7 @@ def delete_article(article_id):
     else:
         flash('Article not found.')
     return redirect(url_for('dashboard'))
+
 
 @app.route('/vote/<article_id>')
 @login_required
