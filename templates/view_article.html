@@ -1,14 +1,23 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 
 {% block content %}
-<div class="container mt-5">
-    <h1>{{ article['title'] }}</h1>
-    <p>Uploaded by: {{ article.get('uploaded_by', 'Unknown') }}</p>
-    
-    <!-- Embed the PDF -->
-    <iframe src="{{ article['file_url'] }}" width="100%" height="800px"></iframe>
-    
-    <!-- Add option to download the PDF -->
-    <a href="{{ article['file_url'] }}" class="btn btn-primary mt-3" target="_blank">Download PDF</a>
+<div class="container">
+    <h2>{{ article['title'] }}</h2>
+    <p><strong>Uploaded by:</strong> {{ article['uploaded_by'] }}</p>
+
+    <!-- Embed PDF using iframe -->
+    <iframe src="{{ article['file_url'] }}" width="100%" height="500px"></iframe>
+
+    <!-- OR provide a link to view/download the PDF -->
+    <p>
+        <a href="{{ article['file_url'] }}" target="_blank">View or Download PDF</a>
+    </p>
+
+    <!-- Optional delete button for the user who uploaded the article -->
+    {% if current_user.username == article['uploaded_by'] %}
+    <form action="{{ url_for('delete_article', article_id=article['id']) }}" method="post">
+        <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this article?');">Delete Article</button>
+    </form>
+    {% endif %}
 </div>
 {% endblock %}

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, request, flash, send_file
+from flask import Flask, render_template, redirect, url_for, request, flash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf import FlaskForm
 from firebase_admin import credentials, firestore, initialize_app, storage
@@ -8,7 +8,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import json
 import random
-import io
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'thisisasecretkey'
@@ -20,7 +19,7 @@ firebase_cred_json = os.getenv('FIREBASE_CREDENTIALS')
 if firebase_cred_json:
     cred_dict = json.loads(firebase_cred_json)
     cred = credentials.Certificate(cred_dict)
-    firebase_app = initialize_app(cred, {'storageBucket': 'journalclub-6a9bb.appspot.com'})
+    initialize_app(cred, {'storageBucket': 'journalclub-6a9bb.appspot.com'})  # Make sure to replace with your bucket name
     db = firestore.client()  # Initialize Firestore client
     bucket = storage.bucket()  # Initialize Firebase Storage bucket
 else:
@@ -49,9 +48,6 @@ def load_user(user_id):
         user_data = user_ref.to_dict()
         return User(user_id=user_id, username=user_data['username'], password=user_data['password'], emoji=user_data['emoji'])
     return None
-
-def convert_firestore_timestamp(timestamp):
-    return timestamp.to_datetime() if timestamp else None
 
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[InputRequired(), Length(min=4, max=15)])
@@ -89,12 +85,8 @@ def login():
             if check_password_hash(user.password, form.password.data):
                 login_user(user, remember=form.remember.data)
                 return redirect(url_for('dashboard'))
-            else:
-                flash('Invalid password')
-        else:
-            flash('Invalid username')
+        flash('Invalid username or password')
     return render_template('login.html', form=form)
-
 
 @app.route('/user')
 @login_required
@@ -120,7 +112,7 @@ def register():
         else:
             user_ref.set(user_data)
             flash('Registration successful! You can now log in.')
-            return redirect(url_for('login'))  # Redirect to login page after registration
+            return redirect(url_for('login'))
     return render_template('register.html', form=form)
 
 @app.route('/dashboard', methods=['GET', 'POST'])
@@ -166,15 +158,34 @@ def dashboard():
 @app.route('/article/<article_id>')
 @login_required
 def view_article(article_id):
-    article_ref = db.collection('articles').document(article_id)
-    article = article_ref.get()
-    
-    if article.exists:
-        article_data = article.to_dict()
+    article_ref = db.collection('articles').document(article_id).get()
+    if article_ref.exists:
+        article_data = article_ref.to_dict()
         return render_template('view_article.html', article=article_data)
     else:
         flash('Article not found.')
         return redirect(url_for('dashboard'))
+
+@app.route('/delete_article/<article_id>', methods=['POST'])
+@login_required
+def delete_article(article_id):
+    article_ref = db.collection('articles').document(article_id)
+    article = article_ref.get()
+    if article.exists:
+        article_data = article.to_dict()
+        if article_data['user_id'] == current_user.id:
+            # Delete file from Firebase Storage
+            blob = bucket.blob(f"pdfs/{article_data['file_url'].split('/')[-1]}")
+            blob.delete()
+
+            # Delete article data from Firestore
+            article_ref.delete()
+            flash('Article deleted successfully!')
+        else:
+            flash('You are not authorized to delete this article.')
+    else:
+        flash('Article not found.')
+    return redirect(url_for('dashboard'))
 
 @app.route('/vote/<article_id>')
 @login_required
@@ -183,10 +194,6 @@ def vote(article_id):
     article = article_ref.get()
     if article.exists:
         article_data = article.to_dict()
-
-        # Ensure votes are handled as integers
-        article_data['votes'] = int(article_data['votes'])
-
         if current_user.emoji not in article_data['emoji_votes']:
             article_data['votes'] += 1
             article_data['emoji_votes'] += current_user.emoji
@@ -196,32 +203,6 @@ def vote(article_id):
             flash('You have already voted for this article!')
     else:
         flash('Article not found.')
-    return redirect(url_for('index'))
-
-@app.route('/delete_article/<article_id>', methods=['POST'])
-@login_required
-def delete_article(article_id):
-    # Fetch the article from Firestore
-    article_ref = db.collection('articles').document(article_id)
-    article = article_ref.get()
-    
-    if article.exists:
-        article_data = article.to_dict()
-        if article_data.get('uploaded_by') == current_user.username:
-            # Delete the article from Firestore
-            article_ref.delete()
-
-            # Also delete the file from Firebase Storage
-            file_name = article_data['file_url'].split('/')[-1]
-            blob = bucket.blob(f'pdfs/{file_name}')
-            blob.delete()
-
-            flash('Article deleted successfully!')
-        else:
-            flash('You are not authorized to delete this article.')
-    else:
-        flash('Article not found.')
-
     return redirect(url_for('dashboard'))
 
 @app.route('/logout')
@@ -238,48 +219,6 @@ def settings():
         flash('Settings updated successfully!')
         return redirect(url_for('settings'))
     return render_template('settings.html', form=form)
-
-@app.route('/meetings')
-@login_required
-def meetings():
-    meetings_ref = db.collection('meetings').order_by('meeting_date').stream()
-    meetings_list = [
-        {
-            'id': meeting.id,
-            'meeting_date': convert_firestore_timestamp(meeting.to_dict().get('meeting_date')),
-            'submission_deadline': convert_firestore_timestamp(meeting.to_dict().get('submission_deadline')),
-            'voting_deadline': convert_firestore_timestamp(meeting.to_dict().get('voting_deadline'))
-        }
-        for meeting in meetings_ref
-    ]
-    return render_template('meetings.html', meetings=meetings_list)
-
-@app.route('/add_meeting', methods=['GET', 'POST'])
-@login_required  # Ensure only logged-in users can access this route
-def add_meeting():
-    if not current_user.is_authenticated:
-        flash('You need to be logged in to add a meeting!')
-        return redirect(url_for('login'))
-    
-    if request.method == 'POST':
-        meeting_date = request.form.get('meeting_date')
-        submission_deadline = request.form.get('submission_deadline')
-        voting_deadline = request.form.get('voting_deadline')
-
-        # Convert string dates to Firestore Timestamps
-        meeting_data = {
-            'meeting_date': firestore.Timestamp.fromisoformat(meeting_date),
-            'submission_deadline': firestore.Timestamp.fromisoformat(submission_deadline),
-            'voting_deadline': firestore.Timestamp.fromisoformat(voting_deadline)
-        }
-
-        # Add a new document to the 'meetings' collection
-        meeting_ref = db.collection('meetings').document()
-        meeting_ref.set(meeting_data)
-        flash('Meeting added successfully!')
-
-    return render_template('add_meeting.html')
-
 
 if __name__ == '__main__':
     app.run(debug=True)
