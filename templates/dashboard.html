@@ -1,34 +1,41 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 
 {% block content %}
 <div class="container mt-5">
-    <h1>Welcome back to the Journal Club, {{ current_user.username }}!</h1>
-    <p>Here you can see all the articles and vote for the ones you'd like to discuss in the next meeting.</p>
+    <h1 class="text-center">Dashboard</h1>
     
-    <h2>Articles</h2>
-    <div class="list-group">
-        {% for article in articles %}
-<tr>
-    <td>{{ article['title'] }}</td>
-    <td>Uploaded by: {{ article.get('uploaded_by', 'Unknown') }}</td>
-    <td>
-        <span class="badge badge-pill badge-secondary">{{ article['votes'] }} votes</span>
-        {% for emoji in article['emoji_votes'] %}
-        <span>{{ emoji }}</span>
-        {% endfor %}
-    </td>
-    <td>
-        <a href="{{ url_for('view_article', article_id=article['id']) }}" class="btn btn-info">View</a>
-        {% if article['user_id'] == current_user.id %}
-        <a href="{{ url_for('upload_article') }}" class="btn btn-primary">Upload New Article</a>
-        <form method="POST" action="{{ url_for('delete_article', article_id=article['id']) }}" style="display:inline;">
-            <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this article?')">Delete</button>
-        </form>
-        {% endif %}
-    </td>
-</tr>
-{% endfor %}
+    {% if articles %}
+        <div class="row">
+            {% for article in articles %}
+                <div class="col-md-4">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ article['title'] }}</h5>
+                            <p class="card-text text-muted">Uploaded by: {{ article['uploaded_by'] }}</p>
 
+                            <div class="d-flex justify-content-between align-items-center">
+                                <a href="{{ url_for('view_article', article_id=article['id']) }}" class="btn btn-primary">View Article</a>
+                                
+                                {% if current_user.id in article['voted_users'] %}
+                                    <button class="btn btn-outline-secondary" disabled>Voted</button>
+                                    <div class="alert alert-info mt-2" role="alert">
+                                        You already voted for this month's article. Please remove your vote for the other article if you wish to vote for this one instead.
+                                    </div>
+                                {% else %}
+                                    <a href="{{ url_for('vote', article_id=article['id']) }}" class="btn btn-outline-primary">Vote</a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="alert alert-warning text-center">No articles found. Start by uploading a new article!</p>
+    {% endif %}
+
+    <div class="text-center mt-4">
+        <a href="{{ url_for('upload_article') }}" class="btn btn-success">Upload New Article</a>
     </div>
 </div>
 {% endblock %}
