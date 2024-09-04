@@ -19,8 +19,14 @@
     <ul class="list-group">
         {% for article in articles %}
         <li class="list-group-item d-flex justify-content-between align-items-center">
-            {{ article['title'] }}
-            <span class="badge badge-primary badge-pill">{{ article['votes'] }} votes</span>
+            {{ article.title }} (Uploaded by: {{ article.user_name }})
+            <span class="badge badge-primary badge-pill">{{ article.votes }} votes</span>
+            
+            {% if article.user_id == current_user.id %}
+            <form action="{{ url_for('delete_article', article_id=article.id) }}" method="post" style="display: inline;">
+                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this article?');">Delete</button>
+            </form>
+            {% endif %}
         </li>
         {% endfor %}
     </ul>

@@ -118,6 +118,24 @@ def register():
 
 from datetime import datetime
 
+from datetime import datetime, timedelta
+
+@app.route('/delete_article/<article_id>', methods=['POST'])
+@login_required
+def delete_article(article_id):
+    try:
+        article_ref = db.collection('articles').document(article_id)
+        article = article_ref.get()
+        if article.exists and article.to_dict().get('user_id') == current_user.id:
+            article_ref.delete()
+            flash('Article deleted successfully!')
+        else:
+            flash('You are not authorized to delete this article.')
+    except Exception as e:
+        flash(f"An error occurred while deleting the article: {e}")
+    
+    return redirect(url_for('dashboard'))
+
 @app.route('/dashboard', methods=['GET', 'POST'])
 @login_required
 def dashboard():
@@ -129,24 +147,31 @@ def dashboard():
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
         file.save(file_path)
 
+        # Upload the file to Firebase Storage and get the download URL
+        storage_path = f'pdfs/{file.filename}'
+        bucket.blob(storage_path).upload_from_filename(file_path)
+        file_url = f'https://storage.googleapis.com/{bucket.name}/{storage_path}'
+
         # Add article to Firestore
         article_data = {
             'title': form.title.data,
-            'file_path': file_path,
+            'file_url': file_url,
             'votes': 0,
             'emoji_votes': '',
             'user_id': current_user.id,
             'user_name': current_user.username,
             'voting_month': datetime.now().strftime('%Y-%m'),
-            'voting_deadline': datetime.now() + timedelta(days=7)
+            'voting_deadline': datetime.now() + timedelta(days=7)  # Example deadline
         }
         db.collection('articles').add(article_data)
         flash('Article uploaded successfully!')
 
     try:
-        # Define current month for filtering
+        # Debugging output
         current_month = datetime.now().strftime('%Y-%m')
-        
+        print(f"Current Month: {current_month}")
+        print(f"Current Time: {datetime.now()}")
+
         # Firestore query with index requirements
         articles = db.collection('articles') \
                      .where('voting_month', '==', current_month) \
@@ -155,13 +180,15 @@ def dashboard():
 
         # Convert Firestore documents to a list
         articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
-        
+        print(f"Fetched Articles: {articles_list}")  # Debugging output
+
     except Exception as e:
         print(f"Error fetching articles: {e}")  # Debugging output
         flash(f"An error occurred while fetching articles: {e}")
         articles_list = []
 
     return render_template('dashboard.html', form=form, articles=articles_list)
+
 
 @app.route('/article/<article_id>')
 @login_required
