@@ -122,13 +122,32 @@ from datetime import datetime
 @login_required
 def dashboard():
     form = UploadForm()
+
     if form.validate_on_submit():
-        # File upload logic remains the same...
-        pass
+        # Add your file upload logic here
+        file = form.file.data
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        file.save(file_path)
+
+        # Add article to Firestore
+        article_data = {
+            'title': form.title.data,
+            'file_path': file_path,
+            'votes': 0,
+            'emoji_votes': '',
+            'user_id': current_user.id,
+            'user_name': current_user.username,
+            'voting_month': datetime.now().strftime('%Y-%m'),
+            'voting_deadline': datetime.now() + timedelta(days=7)
+        }
+        db.collection('articles').add(article_data)
+        flash('Article uploaded successfully!')
 
     try:
-        # Filter articles based on the current voting month
+        # Define current month for filtering
         current_month = datetime.now().strftime('%Y-%m')
+        
+        # Firestore query with index requirements
         articles = db.collection('articles') \
                      .where('voting_month', '==', current_month) \
                      .where('voting_deadline', '>=', datetime.now()) \
@@ -136,13 +155,13 @@ def dashboard():
 
         # Convert Firestore documents to a list
         articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
+        
     except Exception as e:
         print(f"Error fetching articles: {e}")  # Debugging output
         flash(f"An error occurred while fetching articles: {e}")
         articles_list = []
 
     return render_template('dashboard.html', form=form, articles=articles_list)
-
 
 @app.route('/article/<article_id>')
 @login_required
