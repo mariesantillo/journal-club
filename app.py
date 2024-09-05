@@ -92,7 +92,7 @@ def login():
 @app.route('/user')
 @login_required
 def user():
-    articles = db.collection('articles').where('user_id', '==', current_user.id).stream()
+    articles = db.collection('articles').filter('user_id', '==', current_user.id).stream()
     articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
     return render_template('user.html', articles=articles_list)
 
@@ -321,22 +321,21 @@ def upload_article():
 
 def get_upcoming_meeting_dates():
     try:
-        # Fetch the nearest upcoming meeting document
         meetings_ref = db.collection('meetings')
-        upcoming_meeting = meetings_ref.order_by('meeting_date').where('meeting_date', '>=', datetime.now()).limit(1).stream()
-        meeting_data = next(upcoming_meeting).to_dict() if upcoming_meeting else None
+        upcoming_meeting = meetings_ref.order_by('meeting_date').filter('meeting_date', '>=', datetime.now()).limit(1).stream()
+        upcoming_meeting_data = list(upcoming_meeting)
 
-        if meeting_data:
-            submission_deadline = meeting_data['submission_deadline']
-            voting_deadline = meeting_data['voting_deadline']
+        if upcoming_meeting_data:
+            meeting = upcoming_meeting_data[0]
+            submission_deadline = meeting.to_dict().get('submission_deadline')
+            voting_deadline = meeting.to_dict().get('voting_deadline')
             return submission_deadline, voting_deadline
         else:
+            print("No upcoming meetings found.")
             return None, None
     except Exception as e:
-        print(f"Error fetching upcoming meeting dates: {e}")
+        print(f"Error fetching upcoming meeting dates: {str(e)}")
         return None, None
-
-
 
 @app.route('/meetings')
 @login_required
@@ -363,8 +362,8 @@ def vote(article_id):
             else:
                 # Check if user voted for another article this month
                 other_voted = db.collection('articles') \
-                    .where('voting_month', '==', current_month) \
-                    .where('voted_users', 'array_contains', current_user.id) \
+                    .filter('voting_month', '==', current_month) \
+                    .filter('voted_users', 'array_contains', current_user.id) \
                     .stream()
 
                 if list(other_voted):
