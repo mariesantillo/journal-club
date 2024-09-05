@@ -322,7 +322,8 @@ def upload_article():
 def get_upcoming_meeting_dates():
     try:
         meetings_ref = db.collection('meetings')
-        upcoming_meeting = meetings_ref.order_by('meeting_date').filter('meeting_date', '>=', datetime.now()).limit(1).stream()
+        # Use the 'where' method with positional arguments
+        upcoming_meeting = meetings_ref.order_by('meeting_date').where('meeting_date', '>=', datetime.now()).limit(1).stream()
         upcoming_meeting_data = list(upcoming_meeting)
 
         if upcoming_meeting_data:
