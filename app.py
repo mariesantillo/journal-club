@@ -167,32 +167,36 @@ def dashboard():
     form = UploadForm()
 
     if form.validate_on_submit():
-        # File upload logic
-        file = form.file.data
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-        file.save(file_path)
+        try:
+            # File upload logic
+            file = form.file.data
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+            file.save(file_path)
 
-        # Upload the file to Firebase Storage and get the download URL
-        storage_path = f'pdfs/{file.filename}'
-        bucket.blob(storage_path).upload_from_filename(file_path)
-        file_url = f'https://storage.googleapis.com/{bucket.name}/{storage_path}'
+            # Upload the file to Firebase Storage and get the download URL
+            storage_path = f'pdfs/{file.filename}'
+            bucket.blob(storage_path).upload_from_filename(file_path)
+            file_url = f'https://storage.googleapis.com/{bucket.name}/{storage_path}'
 
-        # Add article to Firestore
-        article_data = {
-            'title': form.title.data,
-            'file_url': file_url,
-            'votes': 0,
-            'emoji_votes': '',
-            'user_id': current_user.id,
-            'user_name': current_user.username,
-            'voting_month': datetime.now().strftime('%Y-%m'),
-            'submission_deadline': datetime.now() + timedelta(days=7),  # Set dynamically based on meeting dates
-            'voting_deadline': datetime.now() + timedelta(days=14)  # Example deadline
-        }
-        db.collection('articles').add(article_data)
-        flash('Article uploaded successfully!')
+            # Add article to Firestore
+            article_data = {
+                'title': form.title.data,
+                'file_url': file_url,
+                'votes': 0,
+                'emoji_votes': '',
+                'user_id': current_user.id,
+                'user_name': current_user.username,
+                'voting_month': datetime.now().strftime('%Y-%m'),
+                'submission_deadline': datetime.now() + timedelta(days=7),  # Example dates
+                'voting_deadline': datetime.now() + timedelta(days=14)
+            }
+            db.collection('articles').add(article_data)
+            flash('Article uploaded successfully!')
+            return redirect(url_for('dashboard'))
 
-        return redirect(url_for('dashboard'))
+        except Exception as e:
+            flash(f"An error occurred during the upload: {str(e)}")
+            print(f"Error during file upload: {str(e)}")  # Debugging statement
 
     try:
         # Get the upcoming meeting dates
@@ -206,11 +210,11 @@ def dashboard():
             print(f"Voting Deadline: {voting_deadline}")
 
             # Fetch articles that are within the submission and voting deadlines
-            articles_query = db.collection('articles').where(
+            articles_query = db.collection('articles').filter(
                 'voting_month', '==', current_month
-            ).where(
+            ).filter(
                 'submission_deadline', '>=', datetime.now()
-            ).where(
+            ).filter(
                 'voting_deadline', '>=', datetime.now()
             )
             articles = articles_query.stream()
@@ -222,25 +226,12 @@ def dashboard():
             articles_list = []
             flash('No upcoming meeting found. Please add the dates for the next meeting!')
 
-        # Determine the winning article after the voting deadline
-        show_popup = False
-        winner_article = None
-        if voting_deadline and datetime.now() > voting_deadline:
-            # Find the article with the highest number of votes
-            winner_article = max(articles_list, key=lambda x: x['votes'], default=None)
-            print(f"Winner Article: {winner_article}")
-
-            # Check if the user has already seen the popup
-            if not session.get('popup_shown', False):
-                show_popup = True
-                session['popup_shown'] = True
-
     except Exception as e:
         print(f"Error fetching articles: {e}")  # Debugging output
         flash(f"An error occurred while fetching articles: {e}")
         articles_list = []
 
-    return render_template('dashboard.html', form=form, articles=articles_list, show_popup=show_popup, winner_article=winner_article)
+    return render_template('dashboard.html', form=form, articles=articles_list)
 
 
 @app.route('/article/<article_id>')
