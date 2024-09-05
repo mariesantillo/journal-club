@@ -159,7 +159,7 @@ def delete_article(article_id):
     else:
         return redirect(url_for('dashboard'))
 
-
+from flask import session, jsonify
 
 @app.route('/dashboard', methods=['GET', 'POST'])
 @login_required
@@ -167,7 +167,7 @@ def dashboard():
     form = UploadForm()
 
     if form.validate_on_submit():
-        # Add your file upload logic here
+        # File upload logic
         file = form.file.data
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
         file.save(file_path)
@@ -186,33 +186,61 @@ def dashboard():
             'user_id': current_user.id,
             'user_name': current_user.username,
             'voting_month': datetime.now().strftime('%Y-%m'),
-            'voting_deadline': datetime.now() + timedelta(days=7)  # Example deadline
+            'submission_deadline': datetime.now() + timedelta(days=7),  # Set dynamically based on meeting dates
+            'voting_deadline': datetime.now() + timedelta(days=14)  # Example deadline
         }
         db.collection('articles').add(article_data)
         flash('Article uploaded successfully!')
 
+        return redirect(url_for('dashboard'))
+
     try:
-        # Debugging output
-        current_month = datetime.now().strftime('%Y-%m')
-        print(f"Current Month: {current_month}")
-        print(f"Current Time: {datetime.now()}")
+        # Get the upcoming meeting dates
+        submission_deadline, voting_deadline = get_upcoming_meeting_dates()
 
-        # Firestore query with index requirements
-        articles = db.collection('articles') \
-                     .where('voting_month', '==', current_month) \
-                     .where('voting_deadline', '>=', datetime.now()) \
-                     .stream()
+        if submission_deadline and voting_deadline:
+            # Only show articles that are within the current voting period
+            current_month = datetime.now().strftime('%Y-%m')
+            print(f"Current Month: {current_month}")
+            print(f"Submission Deadline: {submission_deadline}")
+            print(f"Voting Deadline: {voting_deadline}")
 
-        # Convert Firestore documents to a list
-        articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
-        print(f"Fetched Articles: {articles_list}")  # Debugging output
+            # Fetch articles that are within the submission and voting deadlines
+            articles_query = db.collection('articles').where(
+                'voting_month', '==', current_month
+            ).where(
+                'submission_deadline', '>=', datetime.now()
+            ).where(
+                'voting_deadline', '>=', datetime.now()
+            )
+            articles = articles_query.stream()
+
+            # Convert Firestore documents to a list
+            articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
+            print(f"Fetched Articles: {articles_list}")
+        else:
+            articles_list = []
+            flash('No upcoming meeting found. Please add the dates for the next meeting!')
+
+        # Determine the winning article after the voting deadline
+        show_popup = False
+        winner_article = None
+        if voting_deadline and datetime.now() > voting_deadline:
+            # Find the article with the highest number of votes
+            winner_article = max(articles_list, key=lambda x: x['votes'], default=None)
+            print(f"Winner Article: {winner_article}")
+
+            # Check if the user has already seen the popup
+            if not session.get('popup_shown', False):
+                show_popup = True
+                session['popup_shown'] = True
 
     except Exception as e:
         print(f"Error fetching articles: {e}")  # Debugging output
         flash(f"An error occurred while fetching articles: {e}")
         articles_list = []
 
-    return render_template('dashboard.html', form=form, articles=articles_list)
+    return render_template('dashboard.html', form=form, articles=articles_list, show_popup=show_popup, winner_article=winner_article)
 
 
 @app.route('/article/<article_id>')
@@ -265,24 +293,32 @@ def upload_article():
             download_url = blob.public_url
             print(f"File public URL: {download_url}")
 
-            # Save article data to Firestore
-            article_data = {
-                'title': form.title.data,
-                'file_url': download_url,  # Store the download URL in Firestore
-                'votes': 0,
-                'emoji_votes': '',
-                'user_id': current_user.id,
-                'uploaded_by': current_user.username,
-                'voting_month': datetime.now().strftime('%Y-%m'),  # Ensure this is a string
-                'voted_users': [],  
-                'voting_deadline': datetime.now()  # Ensure this is a DateTime object
-                }
-            
-            article_ref = db.collection('articles').document()
-            article_ref.set(article_data)
-            flash('Article uploaded successfully!')
-            return redirect(url_for('dashboard'))
+            submission_deadline, voting_deadline = get_upcoming_meeting_dates()
+            if submission_deadline and voting_deadline and datetime.now() <= submission_deadline:
+                current_month = datetime.now().strftime('%Y-%m')
 
+                # Save article data to Firestore
+                article_data = {
+                    'title': form.title.data,
+                    'file_url': download_url,  # Store the download URL in Firestore
+                    'votes': 0,
+                    'emoji_votes': '',
+                    'user_id': current_user.id,
+                    'uploaded_by': current_user.username,
+                    'voting_month': datetime.now().strftime('%Y-%m'),  # Ensure this is a string
+                    'voted_users': [],  
+                    'voting_deadline': datetime.now()  # Ensure this is a DateTime object
+                    }
+            
+            # Save article data to Firestore
+                article_ref = db.collection('articles').document()
+                article_ref.set(article_data)
+                
+                flash('Article uploaded successfully! :)')
+                return redirect(url_for('dashboard'))
+
+            else:
+                flash('The submission deadline has passed or no upcoming meeting found. Please try again later.')
         except Exception as e:
             flash(f"An error occurred during the upload: {str(e)}")
             print(f"Error during file upload: {str(e)}")  # Debugging statement
@@ -291,6 +327,25 @@ def upload_article():
     articles = db.collection('articles').stream()
     articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
     return render_template('upload_article.html', form=form, articles=articles_list)
+
+def get_upcoming_meeting_dates():
+    try:
+        # Fetch the nearest upcoming meeting document
+        meetings_ref = db.collection('meetings')
+        upcoming_meeting = meetings_ref.order_by('meeting_date').where('meeting_date', '>=', datetime.now()).limit(1).stream()
+        meeting_data = next(upcoming_meeting).to_dict() if upcoming_meeting else None
+
+        if meeting_data:
+            submission_deadline = meeting_data['submission_deadline']
+            voting_deadline = meeting_data['voting_deadline']
+            return submission_deadline, voting_deadline
+        else:
+            return None, None
+    except Exception as e:
+        print(f"Error fetching upcoming meeting dates: {e}")
+        return None, None
+
+
 
 @app.route('/meetings')
 @login_required
@@ -313,7 +368,7 @@ def vote(article_id):
         current_month = datetime.now().strftime('%Y-%m')
         if article_data.get('voting_month') == current_month:
             if current_user.id in article_data.get('voted_users', []):
-                flash('You have already voted for this month’s article. Please remove your vote from the other article if you wish to vote for this one instead.')
+                flash('You have already voted for this month’s article! Please remove your vote from the other article if you wish to vote for this one instead.')
             else:
                 # Check if user voted for another article this month
                 other_voted = db.collection('articles') \
@@ -322,7 +377,7 @@ def vote(article_id):
                     .stream()
 
                 if list(other_voted):
-                    flash('You have already voted for another article this month. Please remove your vote for the other article first.')
+                    flash('You have already voted for another article this month! Please remove your vote for the other article first.')
                 else:
                     # Increment vote count and add user to voted_users
                     article_data['votes'] += 1
@@ -330,7 +385,7 @@ def vote(article_id):
                     article_ref.update(article_data)
                     flash('Vote cast successfully!')
         else:
-            flash('Voting for this article is not open this month.')
+            flash('The voting deadline for this article has passed! Please vote for this months article :)')
 
     else:
         flash('Article not found.')
