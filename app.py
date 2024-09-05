@@ -123,8 +123,12 @@ from datetime import datetime, timedelta
 @app.route('/delete_article/<article_id>', methods=['POST'])
 @login_required
 def delete_article(article_id):
+    # Get the next parameter from the request to determine where to redirect
+    next_page = request.args.get('next', 'dashboard')  # Default to 'dashboard' if not specified
+
     article_ref = db.collection('articles').document(article_id)
     article = article_ref.get()
+    
     if article.exists:
         article_data = article.to_dict()
         if article_data['user_id'] == current_user.id:
@@ -148,7 +152,13 @@ def delete_article(article_id):
             flash('You are not authorized to delete this article.')
     else:
         flash('Article not found.')
-    return redirect(url_for('dashboard'))
+
+    # Redirect based on the 'next' parameter
+    if next_page == 'user':
+        return redirect(url_for('user'))
+    else:
+        return redirect(url_for('dashboard'))
+
 
 
 @app.route('/dashboard', methods=['GET', 'POST'])
