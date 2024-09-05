@@ -123,18 +123,33 @@ from datetime import datetime, timedelta
 @app.route('/delete_article/<article_id>', methods=['POST'])
 @login_required
 def delete_article(article_id):
-    try:
-        article_ref = db.collection('articles').document(article_id)
-        article = article_ref.get()
-        if article.exists and article.to_dict().get('user_id') == current_user.id:
+    article_ref = db.collection('articles').document(article_id)
+    article = article_ref.get()
+    if article.exists:
+        article_data = article.to_dict()
+        if article_data['user_id'] == current_user.id:
+            if 'file_url' in article_data and article_data['file_url']:
+                try:
+                    # Extract filename from file_url
+                    filename = article_data['file_url'].split('/')[-1]
+
+                    # Delete file from Firebase Storage
+                    blob = bucket.blob(f"pdfs/{filename}")
+                    blob.delete()
+                except Exception as e:
+                    flash(f"Error deleting file from storage: {str(e)}")
+            else:
+                flash('No file associated with this article.')
+
+            # Delete article data from Firestore
             article_ref.delete()
             flash('Article deleted successfully!')
         else:
             flash('You are not authorized to delete this article.')
-    except Exception as e:
-        flash(f"An error occurred while deleting the article: {e}")
-    
+    else:
+        flash('Article not found.')
     return redirect(url_for('dashboard'))
+
 
 @app.route('/dashboard', methods=['GET', 'POST'])
 @login_required
@@ -275,38 +290,6 @@ def meetings():
     meetings_list = [{'id': meeting.id, **meeting.to_dict()} for meeting in meetings_ref]
     
     return render_template('meetings.html', meetings=meetings_list)
-
-@app.route('/delete_article/<article_id>', methods=['POST'])
-@login_required
-def delete_article(article_id):
-    article_ref = db.collection('articles').document(article_id)
-    article = article_ref.get()
-    if article.exists:
-        article_data = article.to_dict()
-        if article_data['user_id'] == current_user.id:
-            # Check if 'file_url' exists in article data
-            if 'file_url' in article_data and article_data['file_url']:
-                try:
-                    # Extract filename from file_url
-                    filename = article_data['file_url'].split('/')[-1]
-
-                    # Delete file from Firebase Storage
-                    blob = bucket.blob(f"pdfs/{filename}")
-                    blob.delete()
-                except Exception as e:
-                    flash(f"Error deleting file from storage: {str(e)}")
-            else:
-                flash('No file associated with this article.')
-
-            # Delete article data from Firestore
-            article_ref.delete()
-            flash('Article deleted successfully!')
-        else:
-            flash('You are not authorized to delete this article.')
-    else:
-        flash('Article not found.')
-    return redirect(url_for('dashboard'))
-
 
 @app.route('/vote/<article_id>')
 @login_required
