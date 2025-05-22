@@ -10,6 +10,8 @@ import os
 import json
 import uuid
 import random
+from flask import render_template
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'thisisasecretkey'
@@ -161,88 +163,106 @@ def delete_article(article_id):
         return redirect(url_for('dashboard'))
 
 from flask import session, jsonify
-
 @app.route('/dashboard', methods=['GET', 'POST'])
 @login_required
 def dashboard():
     form = UploadForm()
-
     today = datetime.now()
+
+    # Determine next month for display
     if today.month == 12:
         next_month = datetime(today.year + 1, 1, 1)
     else:
         next_month = datetime(today.year, today.month + 1, 1)
 
+    # 🔎 Calculate last month's key (for winner logic)
+    if today.month == 1:
+        last_month_key = f"{today.year - 1}-12"
+    else:
+        last_month_key = f"{today.year}-{str(today.month - 1).zfill(2)}"
+
+    # 📣 Get winner from last month (if any)
+    winner_article = None
+    try:
+        last_month_articles = db.collection('articles') \
+            .where('voting_month', '==', last_month_key) \
+            .stream()
+
+        winner_list = sorted(
+            [{'id': a.id, **a.to_dict()} for a in last_month_articles],
+            key=lambda x: x.get('votes', 0),
+            reverse=True
+        )
+
+        if winner_list:
+            winner_article = winner_list[0]  # 🎉 Top voted
+    except Exception as e:
+        print(f"Error fetching last month's winner: {e}")
+
+    # ✅ Upload logic
     if form.validate_on_submit():
         try:
-            # File upload logic
             file = form.file.data
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
             file.save(file_path)
 
-            # Upload the file to Firebase Storage and get the download URL
             storage_path = f'pdfs/{file.filename}'
             bucket.blob(storage_path).upload_from_filename(file_path)
             file_url = f'https://storage.googleapis.com/{bucket.name}/{storage_path}'
 
-            # Add article to Firestore
             article_data = {
                 'title': form.title.data,
                 'file_url': file_url,
                 'votes': 0,
-                'emoji_votes': '',
+                'emoji_votes': {},
                 'user_id': current_user.id,
                 'user_name': current_user.username,
-                'voting_month': datetime.now().strftime('%Y-%m'),
-                'submission_deadline': datetime.now() + timedelta(days=7),  # Example dates
-                'voting_deadline': datetime.now() + timedelta(days=14)
+                'emoji': current_user.emoji,
+                'created_at': datetime.now(),
+                'voting_month': today.strftime('%Y-%m'),
+                'submission_deadline': today + timedelta(days=7),
+                'voting_deadline': today + timedelta(days=14),
+                'voted_users': []
             }
             db.collection('articles').add(article_data)
             flash('Article uploaded successfully!')
             return redirect(url_for('dashboard'))
 
         except Exception as e:
-            flash(f"An error occurred during the upload: {str(e)}")
-            print(f"Error during file upload: {str(e)}")  # Debugging statement
+            flash(f"An error occurred during upload: {str(e)}")
+            print(f"Upload error: {str(e)}")
 
+    # 📄 Load current month's articles
     try:
-        # Get the upcoming meeting dates
         submission_deadline, voting_deadline = get_upcoming_meeting_dates()
-
-        if submission_deadline and voting_deadline:
-            # Only show articles that are within the current voting period
-            current_month = datetime.now().strftime('%Y-%m')
-            print(f"Current Month: {current_month}")
-            print(f"Submission Deadline: {submission_deadline}")
-            print(f"Voting Deadline: {voting_deadline}")
-
-            # Fetch articles that are within the submission and voting deadlines
-            articles_query = db.collection('articles').filter(
-                'voting_month', '==', current_month
-            ).filter(
-                'submission_deadline', '>=', datetime.now()
-            ).filter(
-                'voting_deadline', '>=', datetime.now()
-            )
-            articles = articles_query.stream()
-
-            # Convert Firestore documents to a list
-            articles_list = [{'id': a.id, **a.to_dict()} for a in articles]
-
-            # ✅ Sort by vote count descending
-            articles_list.sort(key=lambda a: a.get('votes', 0), reverse=True)
-
-            print(f"Fetched Articles: {articles_list}")
-        else:
-            articles_list = []
-            flash('No upcoming meeting found. Please add the dates for the next meeting!')
-
-    except Exception as e:
-        print(f"Error fetching articles: {e}")  # Debugging output
-        flash(f"An error occurred while fetching articles: {e}")
         articles_list = []
 
-    return render_template('dashboard.html', form=form, articles=articles_list, voting_month_name=next_month.strftime('%B'))
+        if submission_deadline and voting_deadline:
+            current_month = today.strftime('%Y-%m')
+
+            articles_query = db.collection('articles') \
+                .where('voting_month', '==', current_month) \
+                .where('submission_deadline', '>=', today) \
+                .where('voting_deadline', '>=', today)
+
+            articles = articles_query.stream()
+            articles_list = [{'id': a.id, **a.to_dict()} for a in articles]
+            articles_list.sort(key=lambda a: a.get('votes', 0), reverse=True)
+        else:
+            flash("No upcoming meeting found.")
+    except Exception as e:
+        print(f"Error fetching current articles: {e}")
+        flash("Error loading articles.")
+        articles_list = []
+
+    return render_template(
+        'dashboard.html',
+        form=form,
+        articles=articles_list,
+        voting_month_name=next_month.strftime('%B'),
+        winner_article=winner_article,
+        now=today
+    )
 
 @app.route('/article/<article_id>')
 @login_required
