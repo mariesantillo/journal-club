@@ -8,6 +8,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import os
 import json
+import uuid
 import random
 
 app = Flask(__name__)
@@ -251,73 +252,58 @@ def view_article(article_id):
         flash('Article not found.')
         return redirect(url_for('dashboard'))
 
-@app.route('/upload_article', methods=['GET', 'POST'])
+@app.route('/upload', methods=['GET', 'POST'])
 @login_required
-def upload_article():
+def upload():
     form = UploadForm()
+
     if form.validate_on_submit():
-        try:
-            file = form.file.data
-            filename = file.filename
+        file = form.file.data
+        filename = file.filename
 
-            # Ensure the upload directory exists
-            upload_folder = app.config['UPLOAD_FOLDER']
-            if not os.path.exists(upload_folder):
-                os.makedirs(upload_folder)
-                print(f"Created upload directory at {upload_folder}")
+        # Check file extension
+        if not filename.lower().endswith('.pdf'):
+            flash('Only PDF files are allowed.')
+            return redirect(url_for('upload'))
 
-            # Save file locally to UPLOAD_FOLDER
-            file_path = os.path.join(upload_folder, filename)
-            file.save(file_path)
+        # Create a unique filename
+        unique_filename = f"{uuid.uuid4().hex}_{filename}"
 
-            print(f"File saved locally at {file_path}")
+        # Ensure the upload directory exists
+        upload_folder = app.config['UPLOAD_FOLDER']
+        os.makedirs(upload_folder, exist_ok=True)
 
-            # Upload the file to Firebase Storage
-            blob = bucket.blob(f'pdfs/{filename}')
-            blob.upload_from_filename(file_path)
+        # Save locally
+        local_path = os.path.join(upload_folder, unique_filename)
+        file.save(local_path)
 
-            print(f"File uploaded to Firebase Storage as pdfs/{filename}")
+        # Upload to Firebase Storage
+        blob = bucket.blob(f'pdfs/{unique_filename}')
+        blob.upload_from_filename(local_path)
+        blob.make_public()
+        file_url = blob.public_url
 
-            # Make the file publicly accessible
-            blob.make_public()
+        now = datetime.now()
+        article_data = {
+            'title': form.title.data,
+            'file_url': file_url,
+            'votes': 0,
+            'emoji_votes': {},  # dict for emoji voting
+            'user_id': current_user.id,
+            'user_name': current_user.username,
+            'created_at': now,
+            'voting_month': now.strftime('%Y-%m'),
+            'voted_users': [],
+        }
 
-            # Generate a public URL for the uploaded file
-            download_url = blob.public_url
-            print(f"File public URL: {download_url}")
+        db.collection('articles').add(article_data)
+        flash('Article uploaded successfully!')
+        return redirect(url_for('dashboard'))
 
-            submission_deadline, voting_deadline = get_upcoming_meeting_dates()
-            if submission_deadline and voting_deadline and datetime.now() <= submission_deadline:
-                current_month = datetime.now().strftime('%Y-%m')
+    # Fetch uploaded articles by current user
+    user_articles = db.collection('articles').where('user_id', '==', current_user.id).stream()
+    articles_list = [{'id': a.id, **a.to_dict()} for a in user_articles]
 
-                # Save article data to Firestore
-                article_data = {
-                    'title': form.title.data,
-                    'file_url': download_url,  # Store the download URL in Firestore
-                    'votes': 0,
-                    'emoji_votes': '',
-                    'user_id': current_user.id,
-                    'uploaded_by': current_user.username,
-                    'voting_month': datetime.now().strftime('%Y-%m'),  # Ensure this is a string
-                    'voted_users': [],  
-                    'voting_deadline': datetime.now()  # Ensure this is a DateTime object
-                    }
-            
-            # Save article data to Firestore
-                article_ref = db.collection('articles').document()
-                article_ref.set(article_data)
-                
-                flash('Article uploaded successfully! :)')
-                return redirect(url_for('dashboard'))
-
-            else:
-                flash('The submission deadline has passed or no upcoming meeting found. Please try again later.')
-        except Exception as e:
-            flash(f"An error occurred during the upload: {str(e)}")
-            print(f"Error during file upload: {str(e)}")  # Debugging statement
-
-    # Fetch articles to display in the template
-    articles = db.collection('articles').stream()
-    articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
     return render_template('upload_article.html', form=form, articles=articles_list)
 
 def get_upcoming_meeting_dates():
@@ -348,39 +334,30 @@ def meetings():
     
     return render_template('meetings.html', meetings=meetings_list)
 
-@app.route('/vote/<article_id>')
+@app.route('/vote/<article_id>/<emoji>')
 @login_required
-def vote(article_id):
+def emoji_vote(article_id, emoji):
     article_ref = db.collection('articles').document(article_id)
     article = article_ref.get()
     if article.exists:
         article_data = article.to_dict()
-
-        # Check if the current user has already voted for this month's articles
         current_month = datetime.now().strftime('%Y-%m')
+
         if article_data.get('voting_month') == current_month:
             if current_user.id in article_data.get('voted_users', []):
-                flash('You have already voted for this month’s article! Please remove your vote from the other article if you wish to vote for this one instead.')
+                flash("You’ve already voted.")
             else:
-                # Check if user voted for another article this month
-                other_voted = db.collection('articles') \
-                    .filter('voting_month', '==', current_month) \
-                    .filter('voted_users', 'array_contains', current_user.id) \
-                    .stream()
-
-                if list(other_voted):
-                    flash('You have already voted for another article this month! Please remove your vote for the other article first.')
-                else:
-                    # Increment vote count and add user to voted_users
-                    article_data['votes'] += 1
-                    article_data.setdefault('voted_users', []).append(current_user.id)
-                    article_ref.update(article_data)
-                    flash('Vote cast successfully!')
+                article_ref.update({
+                    'votes': firestore.Increment(1),
+                    f'emoji_votes.{emoji}': firestore.Increment(1),
+                    'voted_users': firestore.ArrayUnion([current_user.id])
+                })
+                flash(f"Voted with {emoji}!")
         else:
-            flash('The voting deadline for this article has passed! Please vote for this months article :)')
-
+            flash("Voting closed for this article.")
     else:
-        flash('Article not found.')
+        flash("Article not found.")
+
     return redirect(url_for('dashboard'))
 
 @app.route('/logout')
@@ -407,6 +384,21 @@ def add_meeting():
         return redirect(url_for('meetings'))
     
     return render_template('add_meeting.html')  # Create this template for adding meetings
+
+@app.route('/admin')
+@login_required
+def admin():
+    if current_user.id != 'admin':
+        flash('Access denied.')
+        return redirect(url_for('dashboard'))
+
+    users = db.collection('users').stream()
+    articles = db.collection('articles').stream()
+    meetings = db.collection('meetings').stream()
+
+    return render_template('admin_panel.html', users=[u.to_dict() for u in users],
+                           articles=[{'id': a.id, **a.to_dict()} for a in articles],
+                           meetings=[m.to_dict() for m in meetings])
 
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required

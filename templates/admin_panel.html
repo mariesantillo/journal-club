@@ -1,0 +1,95 @@
+x<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Panel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 2rem 0;
+        }
+        th, td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #ccc;
+        }
+        h2 {
+            margin-top: 3rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>👑 Admin Panel</h1>
+
+    <h2>👤 Users</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Emoji</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ user.emoji }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>📄 Articles</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Author</th>
+                <th>Votes</th>
+                <th>Emoji Votes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for article in articles %}
+                <tr>
+                    <td>{{ article.title }}</td>
+                    <td>{{ article.user_name }}</td>
+                    <td>{{ article.votes }}</td>
+                    <td>
+                        {% for emoji, count in article.emoji_votes.items() %}
+                            {{ emoji }} {{ count }}<br>
+                        {% endfor %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>📅 Meetings</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Description</th>
+                <th>Meeting Date</th>
+                <th>Submission Deadline</th>
+                <th>Voting Deadline</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for meeting in meetings %}
+                <tr>
+                    <td>{{ meeting.title }}</td>
+                    <td>{{ meeting.description }}</td>
+                    <td>{{ meeting.meeting_date.strftime('%Y-%m-%d') if meeting.meeting_date else 'N/A' }}</td>
+                    <td>{{ meeting.submission_deadline.strftime('%Y-%m-%d') if meeting.submission_deadline else 'N/A' }}</td>
+                    <td>{{ meeting.voting_deadline.strftime('%Y-%m-%d') if meeting.voting_deadline else 'N/A' }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <p><a href="{{ url_for('dashboard') }}">← Back to Dashboard</a></p>
+</body>
+</html>
