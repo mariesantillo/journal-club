@@ -20,7 +20,7 @@
             {% else %}
                 <p class="alert alert-warning text-center">No PDF available for this article.</p>
             {% endif %}
-
+            <p><strong>Uploaded by:</strong> {{ article.user_name }} {{ article.get('emoji', '') }}</p>  
             <div class="text-center mt-4">
                 <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
             </div>

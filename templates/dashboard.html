@@ -3,6 +3,14 @@
 {% block content %}
 <div class="container mt-5">
     <h1 class="text-center">Dashboard</h1>
+    <h2 class="text-center mt-3">{{ voting_month_name }} Journal Club 🧠</h2>
+    <p class="text-center">Welcome, {{ current_user.name }}! Here are the articles for this month.</p>
+
+    {% if current_user.is_admin %}
+        <div class="alert alert-info text-center">
+            <strong>Admin Notice:</strong> You can manage articles and users from the admin panel.
+        </div>
+    {% endif %}
     
     {% if show_popup %}
         <div id="confetti-popup" class="popup">
@@ -35,6 +43,7 @@
                     <div class="card mb-4 border-success">
                         <div class="card-body bg-teal text-white">
                             <h5 class="card-title">{{ data.winner['title'] }} 🏆</h5>
+
                             <p class="card-text text-muted">Uploaded by: {{ data.winner['uploaded_by'] }}</p>
                             <a href="{{ url_for('view_article', article_id=data.winner['id']) }}" class="btn btn-light">View Article</a>
                         </div>
@@ -67,6 +76,31 @@
         <p class="alert alert-warning text-center">No articles found. Start by uploading a new article!</p>
     {% endif %}
 
+    <div class="article">
+        <h3>{{ article.title }}</h3>
+        <p>Uploaded by: {{ article.user_name }} {{ article.emoji }}</p>
+        <p><a href="{{ article.file_url }}" target="_blank">Read PDF</a></p>
+      
+        {% if current_user.id in article.voted_users %}
+          <p><strong>You voted for this article ✅</strong></p>
+        {% else %}
+          <a href="{{ url_for('emoji_vote', article_id=article.id, emoji=current_user.emoji) }}" class="btn btn-primary">
+            Vote for this article
+          </a>
+        {% endif %}
+      
+        <p>Votes: {{ article.votes }}</p>
+      
+        {% if article.emoji_votes %}
+          <p><strong>Voted by:</strong>
+            {% for uid, icon in article.emoji_votes.items() %}
+              {{ icon }}
+            {% endfor %}
+          </p>
+        {% endif %}
+      </div>
+      <hr>
+      
     <div class="text-center mt-4">
         <a href="{{ url_for('upload') }}" class="btn btn-success">Upload New Article</a>
     </div>

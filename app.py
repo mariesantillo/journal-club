@@ -167,6 +167,12 @@ from flask import session, jsonify
 def dashboard():
     form = UploadForm()
 
+    today = datetime.now()
+    if today.month == 12:
+        next_month = datetime(today.year + 1, 1, 1)
+    else:
+        next_month = datetime(today.year, today.month + 1, 1)
+
     if form.validate_on_submit():
         try:
             # File upload logic
@@ -221,7 +227,11 @@ def dashboard():
             articles = articles_query.stream()
 
             # Convert Firestore documents to a list
-            articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
+            articles_list = [{'id': a.id, **a.to_dict()} for a in articles]
+
+            # ✅ Sort by vote count descending
+            articles_list.sort(key=lambda a: a.get('votes', 0), reverse=True)
+
             print(f"Fetched Articles: {articles_list}")
         else:
             articles_list = []
@@ -232,8 +242,7 @@ def dashboard():
         flash(f"An error occurred while fetching articles: {e}")
         articles_list = []
 
-    return render_template('dashboard.html', form=form, articles=articles_list)
-
+    return render_template('dashboard.html', form=form, articles=articles_list, voting_month_name=next_month.strftime('%B'))
 
 @app.route('/article/<article_id>')
 @login_required
@@ -296,6 +305,7 @@ def upload():
             'file_url': file_url,
             'votes': 0,
             'emoji_votes': {},
+            'emoji': current_user.emoji,
             'user_id': current_user.id,
             'user_name': current_user.username,
             'created_at': datetime.now(),
@@ -358,10 +368,10 @@ def emoji_vote(article_id, emoji):
             else:
                 article_ref.update({
                     'votes': firestore.Increment(1),
-                    f'emoji_votes.{emoji}': firestore.Increment(1),
-                    'voted_users': firestore.ArrayUnion([current_user.id])
+                    'voted_users': firestore.ArrayUnion([current_user.id]),
+                    f'emoji_votes.{current_user.id}': current_user.emoji
                 })
-                flash(f"Voted with {emoji}!")
+                flash(f"Vote cast sucessfully!")
         else:
             flash("Voting closed for this article.")
     else:
