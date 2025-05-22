@@ -92,7 +92,8 @@ def login():
 @app.route('/user')
 @login_required
 def user():
-    articles = db.collection('articles').filter('user_id', '==', current_user.id).stream()
+    articles = db.collection('articles').where('user_id', '==', current_user.id).stream()
+
     articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
     return render_template('user.html', articles=articles_list)
 
