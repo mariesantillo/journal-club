@@ -72,8 +72,8 @@ class UploadForm(FlaskForm):
 
 @app.route('/')
 def index():
-    articles = db.collection('articles').stream()
-    articles_list = [{'id': article.id, **article.to_dict()} for article in articles]
+    articles = db.collection('articles').where('voting_month', '==', datetime.now().strftime('%Y-%m')).stream()
+    articles_list = [{'id': a.id, **a.to_dict()} for a in articles]
     return render_template('index.html', articles=articles_list)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -276,6 +276,14 @@ def upload():
         local_path = os.path.join(upload_folder, unique_filename)
         file.save(local_path)
 
+        submission_deadline, voting_deadline = get_upcoming_meeting_dates()
+
+        # Fallback if no upcoming meeting is set
+        if not submission_deadline:
+            submission_deadline = datetime.now() + timedelta(days=7)
+        if not voting_deadline:
+            voting_deadline = datetime.now() + timedelta(days=14)
+
         # Upload to Firebase Storage
         blob = bucket.blob(f'pdfs/{unique_filename}')
         blob.upload_from_filename(local_path)
@@ -287,12 +295,14 @@ def upload():
             'title': form.title.data,
             'file_url': file_url,
             'votes': 0,
-            'emoji_votes': {},  # dict for emoji voting
+            'emoji_votes': {},
             'user_id': current_user.id,
             'user_name': current_user.username,
-            'created_at': now,
-            'voting_month': now.strftime('%Y-%m'),
+            'created_at': datetime.now(),
+            'voting_month': datetime.now().strftime('%Y-%m'),
             'voted_users': [],
+            'submission_deadline': submission_deadline,
+            'voting_deadline': voting_deadline
         }
 
         db.collection('articles').add(article_data)
