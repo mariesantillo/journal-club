@@ -19,7 +19,7 @@
             <strong>Admin Notice:</strong> You can manage articles and users from the admin panel.
         </div>
     {% endif %}
-    
+
     {% if show_popup %}
         <div id="confetti-popup" class="popup">
             <div class="popup-content">
@@ -40,42 +40,25 @@
         </script>
         <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.3.1/dist/confetti.browser.min.js"></script>
     {% endif %}
-    
-    {% if articles_by_meeting %}
-        {% for meeting_date, data in articles_by_meeting.items() %}
-            <div class="meeting-section mt-4">
-                <h3>Journal Meeting of {{ meeting_date.strftime('%d.%m.%Y') }}</h3>
-                
-                {% if data.winner %}
-                    <div class="card mb-4 border-success">
-                        <div class="card-body bg-teal text-white">
-                            <h5 class="card-title">👑 {{ data.winner['title'] }} 🏆</h5>
-                            <p class="card-text text-muted">Uploaded by: {{ data.winner['uploaded_by'] }}</p>
-                            <a href="{{ url_for('view_article', article_id=data.winner['id']) }}" class="btn btn-light">View Article</a>
-                        </div>
-                    </div>
-                {% endif %}
 
-                {% for article in data.articles %}
-                    {% if article['id'] != data.winner['id'] %}
-                        <div class="card mb-4">
-                            <div class="card-body">
-                                <h5 class="card-title">{{ article['title'] }}</h5>
-                                <p class="card-text text-muted">Uploaded by: {{ article['uploaded_by'] }}</p>
-                                
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <a href="{{ url_for('view_article', article_id=article['id']) }}" class="btn btn-primary">View Article</a>
-                                    
-                                    {% if current_user.id in article['voted_users'] %}
-                                        <button class="btn btn-outline-secondary" disabled>Voted</button>
-                                    {% else %}
-                                        <a href="{{ url_for('vote', article_id=article['id']) }}" class="btn btn-outline-primary">Vote</a>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                    {% endif %}
-                {% endfor %}
+    {% if articles %}
+        {% for article in articles %}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">{{ article.title }}</h5>
+                    <p class="card-text text-muted">Uploaded by: {{ article.user_name }} {{ article.emoji }}</p>
+                    <p class="text-muted">Voting deadline: {{ article.voting_deadline.strftime('%d.%m.%Y') }}</p>
+
+                    <div class="d-flex justify-content-between align-items-center">
+                        <a href="{{ url_for('view_article', article_id=article.id) }}" class="btn btn-primary">View Article</a>
+
+                        {% if current_user.id in article.voted_users %}
+                            <button class="btn btn-outline-secondary" disabled>Voted</button>
+                        {% else %}
+                            <a href="{{ url_for('vote', article_id=article.id) }}" class="btn btn-outline-primary">Vote</a>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         {% endfor %}
     {% else %}
