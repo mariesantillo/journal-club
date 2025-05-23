@@ -163,6 +163,7 @@ def delete_article(article_id):
         return redirect(url_for('dashboard'))
 
 from flask import session, jsonify
+
 @app.route('/dashboard', methods=['GET', 'POST'])
 @login_required
 def dashboard():
@@ -181,7 +182,7 @@ def dashboard():
     else:
         last_month_key = f"{today.year}-{str(today.month - 1).zfill(2)}"
 
-    # 📣 Get winner from last month (if any)
+    # 📣 Get winner from last month
     winner_article = None
     try:
         last_month_articles = db.collection('articles') \
@@ -195,7 +196,7 @@ def dashboard():
         )
 
         if winner_list:
-            winner_article = winner_list[0]  # 🎉 Top voted
+            winner_article = winner_list[0]
     except Exception as e:
         print(f"Error fetching last month's winner: {e}")
 
@@ -232,25 +233,11 @@ def dashboard():
             flash(f"An error occurred during upload: {str(e)}")
             print(f"Upload error: {str(e)}")
 
-    # 📄 Load current month's articles
+    # 📄 Load ALL articles (no filters)
     try:
-        submission_deadline, voting_deadline = get_upcoming_meeting_dates()
-        articles_list = []
-
-        if submission_deadline and voting_deadline:
-
-            now_utc = datetime.utcnow().replace(microsecond=0)
-            current_month = datetime.now().strftime('%Y-%m')
-            articles_query = db.collection('articles') \
-                .where('voting_month', '==', current_month) \
-                .where('voting_deadline', '>=', now_utc)
-   
-
-            articles = articles_query.stream()
-            articles_list = [{'id': a.id, **a.to_dict()} for a in articles]
-            articles_list.sort(key=lambda a: a.get('votes', 0), reverse=True)
-        else:
-            flash("No upcoming meeting found.")
+        articles = db.collection('articles').stream()
+        articles_list = [{'id': a.id, **a.to_dict()} for a in articles]
+        articles_list.sort(key=lambda a: a.get('votes', 0), reverse=True)
     except Exception as e:
         print(f"Error fetching current articles: {e}")
         flash("Error loading articles.")
