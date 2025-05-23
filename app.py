@@ -361,29 +361,37 @@ def meetings():
     
     return render_template('meetings.html', meetings=meetings_list)
 
-@app.route('/vote/<article_id>/<emoji>')
+@app.route('/unvote/<article_id>', methods=['POST'])
 @login_required
-def emoji_vote(article_id, emoji):
-    article_ref = db.collection('articles').document(article_id)
-    article = article_ref.get()
-    if article.exists:
-        article_data = article.to_dict()
-        current_month = datetime.now().strftime('%Y-%m')
+def unvote(article_id):
+    try:
+        article_ref = db.collection('articles').document(article_id)
+        article = article_ref.get()
+        if not article.exists:
+            flash("Article not found.")
+            return redirect(url_for('dashboard'))
 
-        if article_data.get('voting_month') == current_month:
-            if current_user.id in article_data.get('voted_users', []):
-                flash("You’ve already voted.")
-            else:
-                article_ref.update({
-                    'votes': firestore.Increment(1),
-                    'voted_users': firestore.ArrayUnion([current_user.id]),
-                    f'emoji_votes.{current_user.id}': current_user.emoji
-                })
-                flash(f"Vote cast sucessfully!")
-        else:
-            flash("Voting closed for this article.")
-    else:
-        flash("Article not found.")
+        data = article.to_dict()
+
+        # Remove user's emoji vote and update voted_users list
+        emoji_votes = data.get('emoji_votes', {})
+        voted_users = data.get('voted_users', [])
+
+        if current_user.id in emoji_votes:
+            del emoji_votes[current_user.id]
+        if current_user.id in voted_users:
+            voted_users.remove(current_user.id)
+
+        article_ref.update({
+            'emoji_votes': emoji_votes,
+            'voted_users': voted_users,
+            'votes': len(emoji_votes)
+        })
+
+        flash("Your vote has been withdrawn.")
+    except Exception as e:
+        print(f"Error withdrawing vote: {e}")
+        flash("An error occurred while withdrawing your vote.")
 
     return redirect(url_for('dashboard'))
 

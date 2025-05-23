@@ -47,15 +47,28 @@
                 <div class="card-body">
                     <h5 class="card-title">{{ article.title }}</h5>
                     <p class="card-text text-muted">Uploaded by: {{ article.user_name }} {{ article.emoji }}</p>
-                    <p class="text-muted">Voting deadline: {{ article.voting_deadline.strftime('%d.%m.%Y') }}</p>
-
+                    <p class="text-muted">Voting deadline: {{ article.voting_deadline.strftime('%d.%m.%Y') }}</p>                     
+                    <!-- Emoji Votes Summary -->
+                    {% if article.emoji_votes %}
+                        <p><strong>Votes:</strong>
+                            {% for uid, icon in article.emoji_votes.items() %}
+                                {{ icon }}
+                        {% endfor %}
+                         </p>
+                    {% else %}
+                        <p>No votes yet.</p>
+                    {% endif %}
                     <div class="d-flex justify-content-between align-items-center">
                         <a href="{{ url_for('view_article', article_id=article.id) }}" class="btn btn-primary">View Article</a>
 
-                        {% if current_user.id in article.voted_users %}
-                            <button class="btn btn-outline-secondary" disabled>Voted</button>
+                        {% if current_user.id in article.emoji_votes %}
+                            <form action="{{ url_for('unvote', article_id=article.id) }}" method="POST" style="display:inline;">
+                                <button type="submit" class="btn btn-outline-danger">Withdraw Vote</button>
+                            </form>
                         {% else %}
-                            <a href="{{ url_for('emoji_vote', article_id=article.id, emoji=current_user.emoji) }}" class="btn btn-outline-primary">Vote</a>
+                            <a href="{{ url_for('emoji_vote', article_id=article.id, emoji=current_user.emoji) }}" class="btn btn-outline-primary">
+                                Vote {{ current_user.emoji }}
+                            </a>
                         {% endif %}
                     </div>
                 </div>
