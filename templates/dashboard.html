@@ -55,7 +55,7 @@
                         {% if current_user.id in article.voted_users %}
                             <button class="btn btn-outline-secondary" disabled>Voted</button>
                         {% else %}
-                            <a href="{{ url_for('vote', article_id=article.id) }}" class="btn btn-outline-primary">Vote</a>
+                            <a href="{{ url_for('emoji_vote', article_id=article.id, emoji=current_user.emoji) }}" class="btn btn-outline-primary">Vote</a>
                         {% endif %}
                     </div>
                 </div>
