@@ -241,9 +241,8 @@ def dashboard():
             current_month = today.strftime('%Y-%m')
 
             articles_query = db.collection('articles') \
-                .where('voting_month', '==', current_month) \
-                .where('submission_deadline', '>=', today) \
-                .where('voting_deadline', '>=', today)
+                .where('voting_month', '==', current_month)
+
 
             articles = articles_query.stream()
             articles_list = [{'id': a.id, **a.to_dict()} for a in articles]
