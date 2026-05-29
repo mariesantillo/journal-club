@@ -395,6 +395,48 @@ def unvote(article_id):
 
     return redirect(url_for('dashboard'))
 
+@app.route('/emoji_vote/<article_id>/<emoji>', methods=['GET', 'POST'])
+@login_required
+def emoji_vote(article_id, emoji):
+    try:
+        article_ref = db.collection('articles').document(article_id)
+        article = article_ref.get()
+
+        if not article.exists:
+            flash('Article not found.')
+            return redirect(url_for('dashboard'))
+
+        article_data = article.to_dict()
+
+        # Get existing vote data
+        emoji_votes = article_data.get('emoji_votes', {})
+        voted_users = article_data.get('voted_users', [])
+
+        # Prevent duplicate voting
+        if current_user.id in voted_users:
+            flash('You have already voted for this article.')
+            return redirect(url_for('dashboard'))
+
+        # Add vote
+        emoji_votes[current_user.id] = emoji
+
+        voted_users.append(current_user.id)
+
+        # Update Firestore
+        article_ref.update({
+            'emoji_votes': emoji_votes,
+            'voted_users': voted_users,
+            'votes': len(emoji_votes)
+        })
+
+        flash('Vote submitted successfully!')
+
+    except Exception as e:
+        print(f"Voting error: {e}")
+        flash('An error occurred while voting.')
+
+    return redirect(url_for('dashboard'))
+
 @app.route('/logout')
 @login_required
 def logout():

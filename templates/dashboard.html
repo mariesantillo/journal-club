@@ -66,8 +66,11 @@
                                 <button type="submit" class="btn btn-outline-danger">Withdraw Vote</button>
                             </form>
                         {% else %}
-                            <a href="{{ url_for('emoji_vote', article_id=article.id, emoji=current_user.emoji) }}" class="btn btn-outline-primary">
-                                Vote {{ current_user.emoji }}
+                            <form action="{{ url_for('emoji_vote', article_id=article.id, emoji=current_user.emoji) }}" method="POST">
+                                <button type="submit" class="btn btn-outline-primary">
+                                    Vote {{ current_user.emoji }}
+                                </button>
+                            </form>
                             </a>
                         {% endif %}
                     </div>
