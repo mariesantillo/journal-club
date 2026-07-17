@@ -9,12 +9,12 @@ from datetime import datetime, timedelta
 import uuid
 import random
 import os
+import cloudinary.uploader
 
 from config import (
     SECRET_KEY,
     UPLOAD_FOLDER,
     db,
-    bucket,
     ADMIN_USERNAME,
     EMOJI_LIST,
     MAX_JOKERS_PER_YEAR,
@@ -105,11 +105,15 @@ def save_article_upload(form, submission_deadline=None, voting_deadline=None):
     local_path = os.path.join(upload_folder, unique_filename)
     file.save(local_path)
 
-    storage_path = f'pdfs/{unique_filename}'
-    blob = bucket.blob(storage_path)
-    blob.upload_from_filename(local_path)
-    blob.make_public()
-    file_url = blob.public_url
+    storage_path = f'journal_club/pdfs/{unique_filename}'
+    upload_result = cloudinary.uploader.upload(
+        local_path,
+        resource_type='raw',  # PDFs aren't images, so store as a raw asset
+        public_id=storage_path,
+        overwrite=False,
+    )
+    file_url = upload_result['secure_url']
+    cloudinary_public_id = upload_result['public_id']
 
     now = datetime.now()
     if not submission_deadline:
@@ -127,6 +131,7 @@ def save_article_upload(form, submission_deadline=None, voting_deadline=None):
     article_data = {
         'title': form.title.data,
         'file_url': file_url,
+        'cloudinary_public_id': cloudinary_public_id,
         'votes': 0,
         'emoji_votes': {},
         'user_id': current_user.id,
@@ -261,16 +266,16 @@ def delete_article(article_id):
     if article.exists:
         article_data = article.to_dict()
         if article_data['user_id'] == current_user.id:
-            if 'file_url' in article_data and article_data['file_url']:
+            public_id = article_data.get('cloudinary_public_id')
+            if public_id:
                 try:
-                    # Extract filename from file_url
-                    filename = article_data['file_url'].split('/')[-1]
-
-                    # Delete file from Firebase Storage
-                    blob = bucket.blob(f"pdfs/{filename}")
-                    blob.delete()
+                    cloudinary.uploader.destroy(public_id, resource_type='raw')
                 except Exception as e:
                     flash(f"Error deleting file from storage: {str(e)}")
+            elif article_data.get('file_url'):
+                # Article predates the Cloudinary migration (was on Firebase
+                # Storage) — nothing to clean up here automatically.
+                flash('Article deleted. Its old file was stored on Firebase and may need manual cleanup there.')
             else:
                 flash('No file associated with this article.')
 
