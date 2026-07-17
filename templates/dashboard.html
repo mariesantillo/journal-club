@@ -47,14 +47,21 @@
                 <div class="card-body">
                     <h5 class="card-title">{{ article.title }}</h5>
                     <p class="card-text text-muted">Uploaded by: {{ article.user_name }} {{ article.emoji }}</p>
-                    <p class="text-muted">Voting deadline: {{ article.voting_deadline.strftime('%d.%m.%Y') }}</p>                     
+                    <p class="text-muted">
+                        Voting deadline:
+                        {% if article.voting_deadline %}
+                            {{ article.voting_deadline.strftime('%d.%m.%Y') }}
+                        {% else %}
+                            TBD
+                        {% endif %}
+                    </p>
                     <!-- Emoji Votes Summary -->
                     {% if article.emoji_votes %}
                         <p><strong>Votes:</strong>
                             {% for uid, icon in article.emoji_votes.items() %}
                                 {{ icon }}
-                        {% endfor %}
-                         </p>
+                            {% endfor %}
+                        </p>
                     {% else %}
                         <p>No votes yet.</p>
                     {% endif %}
@@ -71,7 +78,6 @@
                                     Vote {{ current_user.emoji }}
                                 </button>
                             </form>
-                            </a>
                         {% endif %}
                     </div>
                 </div>

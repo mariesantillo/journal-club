@@ -7,7 +7,7 @@
 
     <h1 class="my-4">User Profile</h1>
 
-    <!-- Profile Header -->
+<!-- Profile Header -->
     <div class="text-center mb-4">
 
         <div style="font-size: 60px;">
@@ -26,22 +26,22 @@
                     🎭 Joker used this month
                 </span>
             {% endif %}
-        {% endif %}
 
-        <!-- Use Joker Button -->
-        {% if user_data.joker_remaining > 0 and user_data.joker_used_month != current_month %}
-        <form method="POST" action="{{ url_for('use_joker') }}" class="mt-2">
-            <button class="btn btn-warning btn-sm">
-                Use Joker 🎭
-            </button>
-        </form>
+            <!-- Use Joker Button -->
+            {% if user_data.joker_remaining > 0 and user_data.joker_used_month != current_month %}
+            <form method="POST" action="{{ url_for('use_joker') }}" class="mt-2">
+                <button class="btn btn-warning btn-sm">
+                    Use Joker 🎭
+                </button>
+            </form>
+            {% endif %}
         {% endif %}
 
     </div>
 
     <hr>
 
-    <!-- Articles -->
+<!-- Articles -->
     <h2>Your Articles</h2>
 
     {% if articles %}
@@ -62,7 +62,7 @@
             </span>
 
             {% if article.user_id == current_user.id %}
-            <form action="{{ url_for('delete_article', article_id=article.id) }}"
+            <form action="{{ url_for('delete_article', article_id=article.id, next='user') }}"
                   method="post"
                   style="display:inline;">
                 <button class="btn btn-danger btn-sm"

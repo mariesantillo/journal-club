@@ -94,26 +94,21 @@ def login():
 
 @app.route('/user')
 @login_required
-def current_month():
-    return datetime.now().strftime('%Y-%m')
 def user():
-    articles = db.collection('articles')\
-        .where('user_id', '==', current_user.id)\
+    articles = db.collection('articles') \
+        .where('user_id', '==', current_user.id) \
         .stream()
 
     articles_list = [{'id': a.id, **a.to_dict()} for a in articles]
 
-    # get user data for jokers
     user_doc = db.collection('users').document(current_user.id).get()
     user_data = user_doc.to_dict() if user_doc.exists else {}
 
-    current_month = datetime.now().strftime('%Y-%m')
-
     return render_template(
-        'user.html',
+        "user.html",
         articles=articles_list,
         user_data=user_data,
-        current_month=current_month
+        current_month=datetime.now().strftime("%Y-%m")
     )
 
 @app.route('/register', methods=['GET', 'POST'])
