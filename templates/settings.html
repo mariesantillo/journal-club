@@ -3,11 +3,127 @@
 {% block title %}Settings{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1 class="my-4">Settings</h1>
-    <form method="POST">
-        {{ form.hidden_tag() }}
-        <button type="submit" class="btn btn-primary">Save Changes</button>
-    </form>
+<div class="container mt-5">
+    <h1 class="mb-4">Settings</h1>
+
+    <div class="card mb-5">
+        <div class="card-body">
+            <h4 class="card-title">Your Profile</h4>
+            <form method="POST" novalidate>
+                {{ form.hidden_tag() }}
+                <div class="mb-3">
+                    <label class="form-label">Emoji Avatar</label>
+                    {{ form.emoji(class="form-select w-auto") }}
+                </div>
+                {{ form.submit(class="btn btn-primary") }}
+            </form>
+        </div>
+    </div>
+
+    {% if admin_data %}
+        <hr class="my-5">
+        <h2 class="mb-4">Admin</h2>
+
+        <div class="card mb-5">
+            <div class="card-header">
+                <h4 class="mb-0">Users</h4>
+            </div>
+            <div class="card-body p-0">
+                <table class="table mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Emoji</th>
+                            <th>Role</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in admin_data.users %}
+                        <tr>
+                            <td>{{ u.username }}</td>
+                            <td>{{ u.emoji }}</td>
+                            <td>
+                                {% if u.is_admin %}
+                                    <span class="badge bg-success">Admin</span>
+                                {% else %}
+                                    <span class="text-muted">Member</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if u.id == current_user.id %}
+                                    <span class="text-muted small">(you)</span>
+                                {% else %}
+                                    <form action="{{ url_for('toggle_admin', user_id=u.id) }}" method="POST" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                            {% if u.is_admin %}Remove Admin{% else %}Make Admin{% endif %}
+                                        </button>
+                                    </form>
+                                    <form action="{{ url_for('delete_user', user_id=u.id) }}" method="POST" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                onclick="return confirm('Delete user {{ u.username }}? This cannot be undone.');">
+                                            Delete
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mb-5">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">Meetings</h4>
+                <a href="{{ url_for('add_meeting') }}" class="btn btn-sm btn-success">Add Meeting</a>
+            </div>
+            <div class="card-body p-0">
+                {% if admin_data.meetings %}
+                    <table class="table mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Date</th>
+                                <th>Reschedule</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for m in admin_data.meetings %}
+                            <tr>
+                                <td>{{ m.title or 'Untitled meeting' }}</td>
+                                <td>
+                                    {% if m.meeting_date %}
+                                        {{ m.meeting_date.strftime('%d.%m.%Y') }}
+                                    {% else %}
+                                        <span class="text-muted">No date set</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <form action="{{ url_for('reschedule_meeting', meeting_id=m.id) }}" method="POST" class="d-flex gap-2">
+                                        <input type="date" name="meeting_date" class="form-control form-control-sm" required>
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+                                    </form>
+                                </td>
+                                <td class="text-end">
+                                    <form action="{{ url_for('cancel_meeting', meeting_id=m.id) }}" method="POST" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                onclick="return confirm('Cancel this meeting?');">
+                                            Cancel
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="text-muted p-3 mb-0">No meetings scheduled yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
 </div>
 {% endblock %}
