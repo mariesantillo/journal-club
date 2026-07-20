@@ -40,7 +40,7 @@
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h3 class="mb-0">{{ club.display_name }} Journal Club 🧠</h3>
                 {% if club.is_open %}
-                    <span class="badge bg-success">Voting open</span>
+                    <span class="badge badge-success">Voting open</span>
                 {% endif %}
             </div>
 
@@ -64,8 +64,8 @@
                                     </td>
                                     <td>{{ article.user_name }} {{ article.emoji }}</td>
                                     <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <span class="badge bg-primary rounded-pill">{{ article.votes }}</span>
+                                        <div class="d-flex align-items-center">
+                                            <span class="badge badge-primary badge-pill mr-2">{{ article.votes }}</span>
 
                                             {% if current_user.id in article.emoji_votes %}
                                                 <form action="{{ url_for('unvote', article_id=article.id) }}" method="POST" class="d-inline mb-0">

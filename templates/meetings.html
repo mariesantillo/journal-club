@@ -1,26 +1,44 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
+
+{% block title %}Meetings{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1 class="my-4">Upcoming Meetings</h1>
-    <table class="table">
-        <thead>
-            <tr>
-                <th scope="col">Meeting Date</th>
-                <th scope="col">Submission Deadline</th>
-                <th scope="col">Voting Deadline</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for meeting in meetings %}
-            <tr>
-                <td>{{ meeting.meeting_date.strftime('%B %d, %Y') if meeting.meeting_date else 'TBD' }}</td>
-                <td>{{ meeting.submission_deadline.strftime('%B %d, %Y') if meeting.submission_deadline else 'TBD' }}</td>
-                <td>{{ meeting.voting_deadline.strftime('%B %d, %Y') if meeting.voting_deadline else 'TBD' }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    <a href="{{ url_for('add_meeting') }}" class="btn btn-primary">Add New Meeting</a>
+<div class="container mt-5">
+    <h1 class="mb-4">Upcoming &amp; Past Meetings</h1>
+
+    {% if cycles %}
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Journal Club</th>
+                    <th>Upload deadline</th>
+                    <th>Voting deadline</th>
+                    <th>Meeting date</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in cycles %}
+                <tr>
+                    <td>{{ c.display_name }}</td>
+                    <td>{{ c.submission_deadline.strftime('%d.%m.%Y') if c.submission_deadline else '—' }}</td>
+                    <td>{{ c.voting_deadline.strftime('%d.%m.%Y') if c.voting_deadline else '—' }}</td>
+                    <td>{{ c.meeting_date.strftime('%d.%m.%Y') if c.meeting_date else '—' }}</td>
+                    <td>
+                        {% if c.winner_announced %}
+                            <span class="badge badge-secondary">Closed</span>
+                        {% elif c.voting_open %}
+                            <span class="badge badge-success">Voting open</span>
+                        {% else %}
+                            <span class="text-muted">Upcoming</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="text-muted">No meeting dates have been set yet.</p>
+    {% endif %}
 </div>
 {% endblock %}

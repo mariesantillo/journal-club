@@ -22,7 +22,7 @@
             </p>
 
             {% if user_data.joker_used_month == current_month %}
-                <span class="badge bg-warning text-dark">
+                <span class="badge badge-warning">
                     🎭 Joker used this month
                 </span>
             {% endif %}
@@ -51,13 +51,16 @@
 
             <div>
                 <strong>{{ article.title }}</strong>
+                {% if article.won_month %}
+                    <span class="badge badge-warning">🏆 Chosen for {{ article.won_month }}</span>
+                {% endif %}
                 <br>
                 <small class="text-muted">
                     Uploaded by: {{ article.user_name }}
                 </small>
             </div>
 
-            <span class="badge bg-primary rounded-pill">
+            <span class="badge badge-primary badge-pill">
                 {{ article.votes }} votes
             </span>
 

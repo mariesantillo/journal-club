@@ -87,7 +87,64 @@ class UploadForm(FlaskForm):
     submit = SubmitField('Upload')
 
 
-def save_article_upload(form, submission_deadline=None, voting_deadline=None):
+def _next_month(dt):
+    if dt.month == 12:
+        return datetime(dt.year + 1, 1, 1)
+    return datetime(dt.year, dt.month + 1, 1)
+
+
+def _month_display_name(key):
+    try:
+        return datetime.strptime(key, '%Y-%m').strftime('%B %Y')
+    except ValueError:
+        return key
+
+
+def _pick_winner(articles):
+    """Highest votes wins; ties are broken by whichever article was
+    submitted earliest (first-come-first-served, deterministic)."""
+    if not articles:
+        return None
+    return min(articles, key=lambda a: (-a.get('votes', 0), a.get('created_at') or datetime.max))
+
+
+def _close_cycle(month_key, cycle=None):
+    """Compute the winner for a month and mark its cycle as closed/announced."""
+    articles = [{'id': a.id, **a.to_dict()} for a in db.collection('articles').where('voting_month', '==', month_key).stream()]
+    winner = _pick_winner(articles)
+    db.collection('meetings').document(month_key).set({
+        'voting_open': False,
+        'winner_announced': True,
+        'winner_article_id': winner['id'] if winner else None,
+        'announced_at': datetime.now(),
+    }, merge=True)
+    return winner
+
+
+def _auto_close_expired_cycles():
+    """Lazily close out any voting cycle whose deadline has passed. There's
+    no real cron job here — this runs whenever someone loads the dashboard,
+    so the first visitor after a deadline triggers the winner computation."""
+    now = datetime.now()
+    current_key = now.strftime('%Y-%m')
+
+    for c in db.collection('meetings').where('voting_open', '==', True).stream():
+        cycle = c.to_dict()
+        deadline = cycle.get('voting_deadline')
+        if deadline and deadline < now:
+            _close_cycle(c.id, cycle)
+
+    # Also close the real current month once its deadline passes, even if no
+    # admin ever explicitly opened it (calendar-default behavior).
+    current_doc = db.collection('meetings').document(current_key).get()
+    if current_doc.exists:
+        cycle = current_doc.to_dict()
+        deadline = cycle.get('voting_deadline')
+        if cycle.get('voting_open', True) and not cycle.get('winner_announced') and deadline and deadline < now:
+            _close_cycle(current_key, cycle)
+
+
+def save_article_upload(form):
     """Shared upload logic used by both /dashboard and /upload so behavior
     (extension check, safe filenames, unique names) is consistent everywhere."""
     file = form.file.data
@@ -116,17 +173,17 @@ def save_article_upload(form, submission_deadline=None, voting_deadline=None):
     cloudinary_public_id = upload_result['public_id']
 
     now = datetime.now()
-    if not submission_deadline:
-        submission_deadline = now + timedelta(days=7)
-    if not voting_deadline:
-        voting_deadline = now + timedelta(days=14)
 
     # Articles are tagged with the month of the meeting they'll be discussed
     # at (the NEXT calendar month), not the month they were uploaded in.
-    if now.month == 12:
-        target_month = datetime(now.year + 1, 1, 1)
-    else:
-        target_month = datetime(now.year, now.month + 1, 1)
+    target_key = _next_month(now).strftime('%Y-%m')
+
+    # Pull deadlines from whatever the admin has set for that month's cycle,
+    # falling back to generic +7/+14 day defaults if nothing's been set.
+    cycle_doc = db.collection('meetings').document(target_key).get()
+    cycle = cycle_doc.to_dict() if cycle_doc.exists else {}
+    submission_deadline = cycle.get('submission_deadline') or (now + timedelta(days=7))
+    voting_deadline = cycle.get('voting_deadline') or (now + timedelta(days=14))
 
     article_data = {
         'title': form.title.data,
@@ -138,7 +195,7 @@ def save_article_upload(form, submission_deadline=None, voting_deadline=None):
         'user_name': current_user.username,
         'emoji': current_user.emoji,
         'created_at': now,
-        'voting_month': target_month.strftime('%Y-%m'),
+        'voting_month': target_key,
         'submission_deadline': submission_deadline,
         'voting_deadline': voting_deadline,
         'voted_users': []
@@ -148,11 +205,45 @@ def save_article_upload(form, submission_deadline=None, voting_deadline=None):
     return True
 
 
+def _get_pending_announcement():
+    """Most recently closed voting cycle that this browser hasn't dismissed
+    yet, with the winning article's details attached. Shared by / and
+    /dashboard so both show the same announcement + confetti."""
+    dismissed = session.get('dismissed_announcements', [])
+    cycles = {c.id: c.to_dict() for c in db.collection('meetings').stream()}
+    announced = sorted(
+        [(k, c) for k, c in cycles.items() if c.get('winner_announced') and k not in dismissed],
+        key=lambda kv: kv[1].get('announced_at') or datetime.min,
+        reverse=True,
+    )
+    if not announced:
+        return None
+
+    ann_key, ann_cycle = announced[0]
+    winner_id = ann_cycle.get('winner_article_id')
+    if not winner_id:
+        return None
+
+    winner_doc = db.collection('articles').document(winner_id).get()
+    if not winner_doc.exists:
+        return None
+
+    w = winner_doc.to_dict()
+    return {
+        'month_key': ann_key,
+        'display_name': _month_display_name(ann_key),
+        'title': w.get('title'),
+        'user_name': w.get('user_name'),
+    }
+
+
 @app.route('/')
 def index():
-    articles = db.collection('articles').where('voting_month', '==', datetime.now().strftime('%Y-%m')).stream()
-    articles_list = [{'id': a.id, **a.to_dict()} for a in articles]
-    return render_template('index.html', articles=articles_list)
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+
+    _auto_close_expired_cycles()
+    return render_template('index.html', announcement=_get_pending_announcement())
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -184,6 +275,16 @@ def user():
         .stream()
 
     articles_list = [{'id': a.id, **a.to_dict()} for a in articles]
+
+    # Attach "won X Journal Club" info to any article that was a past winner.
+    winner_map = {}
+    for c in db.collection('meetings').where('winner_announced', '==', True).stream():
+        d = c.to_dict()
+        winner_id = d.get('winner_article_id')
+        if winner_id:
+            winner_map[winner_id] = _month_display_name(c.id)
+    for article in articles_list:
+        article['won_month'] = winner_map.get(article['id'])
 
     user_doc = db.collection('users').document(current_user.id).get()
     user_data = user_doc.to_dict() if user_doc.exists else {}
@@ -300,14 +401,7 @@ def dashboard():
     form = UploadForm()
     today = datetime.now()
     current_month_key = today.strftime('%Y-%m')
-
-    # The bucket that's currently open for new submissions is next calendar
-    # month's meeting (see save_article_upload).
-    if today.month == 12:
-        next_month = datetime(today.year + 1, 1, 1)
-    else:
-        next_month = datetime(today.year, today.month + 1, 1)
-    next_month_key = next_month.strftime('%Y-%m')
+    next_month_key = _next_month(today).strftime('%Y-%m')
 
     # Upload logic (shared with /upload — validates extension, uses safe/unique filenames)
     if form.validate_on_submit():
@@ -318,14 +412,24 @@ def dashboard():
             flash(f"An error occurred during upload: {str(e)}")
             print(f"Upload error: {str(e)}")
 
-    # Load ALL articles and group them by the month they'll be discussed in.
+    # Close out any voting cycle whose deadline has passed (see docstring).
+    _auto_close_expired_cycles()
+
+    # Look up everyone's CURRENT emoji so the dashboard reflects emoji
+    # changes made in Settings, even on articles submitted long ago.
     try:
-        articles = db.collection('articles').stream()
+        user_emoji_map = {u.id: u.to_dict().get('emoji', '') for u in db.collection('users').stream()}
+    except Exception as e:
+        print(f"Error fetching users for emoji lookup: {e}")
+        user_emoji_map = {}
+
+    try:
         all_articles = []
-        for a in articles:
+        for a in db.collection('articles').stream():
             article = {'id': a.id, **a.to_dict()}
             article.setdefault('emoji_votes', {})
             article.setdefault('votes', 0)
+            article['emoji'] = user_emoji_map.get(article.get('user_id'), article.get('emoji', ''))
             all_articles.append(article)
     except Exception as e:
         print(f"Error fetching articles: {e}")
@@ -340,46 +444,53 @@ def dashboard():
     # Always show the currently-open submission bucket, even if it's empty.
     groups.setdefault(next_month_key, [])
 
-    # Fallback deadline info (from the next scheduled meeting) for buckets
-    # that don't have any articles yet to pull a deadline from.
-    fallback_submission_deadline, fallback_voting_deadline = get_upcoming_meeting_dates()
+    cycles = {c.id: c.to_dict() for c in db.collection('meetings').stream()}
 
     journal_clubs = []
     for key in sorted(groups.keys(), reverse=True):
         arts = sorted(groups[key], key=lambda a: a.get('votes', 0), reverse=True)
+        cycle = cycles.get(key, {})
 
-        try:
-            display_name = datetime.strptime(key, '%Y-%m').strftime('%B %Y')
-        except ValueError:
-            display_name = key
+        # If an admin has explicitly managed this month's cycle, use that.
+        # Otherwise fall back to plain calendar-based defaults.
+        is_open = cycle.get('voting_open', key == current_month_key)
+        is_closed = cycle.get('winner_announced', key < current_month_key)
 
-        is_past = key < current_month_key
         winner = None
         deadline = None
 
-        if is_past:
-            if arts:
-                winner = max(arts, key=lambda a: a.get('votes', 0))
+        if is_closed:
+            winner_id = cycle.get('winner_article_id')
+            if winner_id:
+                winner = next((a for a in arts if a['id'] == winner_id), None)
+            if not winner and arts:
+                winner = _pick_winner(arts)
         else:
-            deadlines = [a.get('voting_deadline') for a in arts if a.get('voting_deadline')]
-            if deadlines:
-                deadline = max(deadlines)
-            elif fallback_voting_deadline:
-                deadline = fallback_voting_deadline
+            deadline = cycle.get('voting_deadline')
+            if not deadline and arts:
+                deadlines = [a.get('voting_deadline') for a in arts if a.get('voting_deadline')]
+                if deadlines:
+                    deadline = max(deadlines)
 
         journal_clubs.append({
             'key': key,
-            'display_name': display_name,
+            'display_name': _month_display_name(key),
             'articles': arts,
             'winner': winner,
             'deadline': deadline,
-            'is_current': key == current_month_key,
+            'is_open': is_open,
         })
+
+    # Winner-announcement popup: shows the most recently closed cycle, and
+    # persists (for this browser) until dismissed — not just for the first
+    # visitor after the deadline.
+    announcement = _get_pending_announcement()
 
     return render_template(
         'dashboard.html',
         form=form,
         journal_clubs=journal_clubs,
+        announcement=announcement,
         now=today
     )
 
@@ -403,9 +514,8 @@ def upload():
     form = UploadForm()
 
     if form.validate_on_submit():
-        submission_deadline, voting_deadline = get_upcoming_meeting_dates()
         try:
-            save_article_upload(form, submission_deadline, voting_deadline)
+            save_article_upload(form)
         except Exception as e:
             flash(f"An error occurred during upload: {str(e)}")
             print(f"Upload error: {str(e)}")
@@ -418,31 +528,13 @@ def upload():
     return render_template('upload_article.html', form=form, articles=articles_list)
 
 
-def get_upcoming_meeting_dates():
-    try:
-        meetings_ref = db.collection('meetings')
-        upcoming_meeting = meetings_ref.order_by('meeting_date').where('meeting_date', '>=', datetime.now()).limit(1).stream()
-        upcoming_meeting_data = list(upcoming_meeting)
-
-        if upcoming_meeting_data:
-            meeting = upcoming_meeting_data[0]
-            submission_deadline = meeting.to_dict().get('submission_deadline')
-            voting_deadline = meeting.to_dict().get('voting_deadline')
-            return submission_deadline, voting_deadline
-        else:
-            print("No upcoming meetings found.")
-            return None, None
-    except Exception as e:
-        print(f"Error fetching upcoming meeting dates: {str(e)}")
-        return None, None
-
-
-@app.route('/meetings')
-@login_required
-def meetings():
-    meetings_ref = db.collection('meetings').stream()
-    meetings_list = [{'id': meeting.id, **meeting.to_dict()} for meeting in meetings_ref]
-    return render_template('meetings.html', meetings=meetings_list)
+@app.route('/dismiss_announcement/<month_key>', methods=['POST'])
+def dismiss_announcement(month_key):
+    dismissed = session.get('dismissed_announcements', [])
+    if month_key not in dismissed:
+        dismissed.append(month_key)
+    session['dismissed_announcements'] = dismissed
+    return redirect(request.referrer or url_for('dashboard'))
 
 
 @app.route('/unvote/<article_id>', methods=['POST'])
@@ -524,37 +616,6 @@ def logout():
     return redirect(url_for('index'))
 
 
-@app.route('/add_meeting', methods=['GET', 'POST'])
-@login_required
-def add_meeting():
-    if not current_user.is_admin:
-        flash('Access denied.')
-        return redirect(url_for('dashboard'))
-
-    if request.method == 'POST':
-        try:
-            # NOTE: field name is `meeting_date`, matching what
-            # get_upcoming_meeting_dates() queries on. It used to be saved
-            # as `date`, which meant deadlines were never actually found.
-            meeting_date = datetime.strptime(request.form['date'], '%Y-%m-%d')
-        except (KeyError, ValueError):
-            flash('Please provide a valid meeting date.')
-            return redirect(url_for('add_meeting'))
-
-        meeting_data = {
-            'title': request.form.get('title', ''),
-            'description': request.form.get('description', ''),
-            'meeting_date': meeting_date,
-            'submission_deadline': meeting_date - timedelta(days=7),
-            'voting_deadline': meeting_date - timedelta(days=1),
-        }
-        db.collection('meetings').document().set(meeting_data)
-        flash('Meeting added successfully!')
-        return redirect(url_for('meetings'))
-
-    return render_template('add_meeting.html')
-
-
 @app.route('/admin/toggle_admin/<user_id>', methods=['POST'])
 @login_required
 def toggle_admin(user_id):
@@ -592,59 +653,103 @@ def delete_user(user_id):
     return redirect(url_for('settings'))
 
 
-@app.route('/admin/meetings/<meeting_id>/cancel', methods=['POST'])
+@app.route('/admin/cycles/save', methods=['POST'])
 @login_required
-def cancel_meeting(meeting_id):
+def save_cycle():
     if not current_user.is_admin:
         flash('Access denied.')
         return redirect(url_for('dashboard'))
 
-    db.collection('meetings').document(meeting_id).delete()
-    flash('Meeting cancelled.')
-    return redirect(url_for('settings'))
+    month_key = request.form.get('month')  # from <input type="month">, e.g. "2026-08"
+    submission_str = request.form.get('submission_deadline')
+    voting_str = request.form.get('voting_deadline')
+    meeting_str = request.form.get('meeting_date')
 
-
-@app.route('/admin/meetings/<meeting_id>/reschedule', methods=['POST'])
-@login_required
-def reschedule_meeting(meeting_id):
-    if not current_user.is_admin:
-        flash('Access denied.')
-        return redirect(url_for('dashboard'))
-
-    new_date_str = request.form.get('meeting_date')
-    if not new_date_str:
-        flash('Please provide a new meeting date.')
+    if not month_key:
+        flash('Please choose a month.')
         return redirect(url_for('settings'))
 
+    update = {}
     try:
-        new_date = datetime.strptime(new_date_str, '%Y-%m-%d')
+        if submission_str:
+            update['submission_deadline'] = datetime.strptime(submission_str, '%Y-%m-%d')
+        if voting_str:
+            update['voting_deadline'] = datetime.strptime(voting_str, '%Y-%m-%d')
+        if meeting_str:
+            update['meeting_date'] = datetime.strptime(meeting_str, '%Y-%m-%d')
     except ValueError:
         flash('Invalid date format.')
         return redirect(url_for('settings'))
 
-    db.collection('meetings').document(meeting_id).update({
-        'meeting_date': new_date,
-        'submission_deadline': new_date - timedelta(days=7),
-        'voting_deadline': new_date - timedelta(days=1),
-    })
-    flash('Meeting rescheduled.')
+    if not update:
+        flash('Please provide at least one date.')
+        return redirect(url_for('settings'))
+
+    db.collection('meetings').document(month_key).set(update, merge=True)
+    flash(f'Dates saved for {_month_display_name(month_key)}.')
     return redirect(url_for('settings'))
 
 
-@app.route('/admin')
+@app.route('/admin/cycles/<month_key>/delete', methods=['POST'])
 @login_required
-def admin():
+def delete_cycle(month_key):
     if not current_user.is_admin:
         flash('Access denied.')
         return redirect(url_for('dashboard'))
 
-    users = db.collection('users').stream()
-    articles = db.collection('articles').stream()
-    meetings = db.collection('meetings').stream()
+    db.collection('meetings').document(month_key).delete()
+    flash(f'Deadline info for {_month_display_name(month_key)} deleted. Its articles keep their own deadlines.')
+    return redirect(url_for('settings'))
 
-    return render_template('admin_panel.html', users=[u.to_dict() for u in users],
-                           articles=[{'id': a.id, **a.to_dict()} for a in articles],
-                           meetings=[m.to_dict() for m in meetings])
+
+@app.route('/admin/cycles/open_next', methods=['POST'])
+@login_required
+def open_next_cycle():
+    if not current_user.is_admin:
+        flash('Access denied.')
+        return redirect(url_for('dashboard'))
+
+    now = datetime.now()
+    current_key = now.strftime('%Y-%m')
+    next_key = _next_month(now).strftime('%Y-%m')
+
+    explicitly_open = list(db.collection('meetings').where('voting_open', '==', True).stream())
+    if explicitly_open:
+        for c in explicitly_open:
+            _close_cycle(c.id, c.to_dict())
+    else:
+        # Nothing was explicitly opened yet, so the real current month was
+        # open by calendar default — close that one out now.
+        current_doc = db.collection('meetings').document(current_key).get()
+        _close_cycle(current_key, current_doc.to_dict() if current_doc.exists else {})
+
+    db.collection('meetings').document(next_key).set({
+        'voting_open': True,
+        'winner_announced': False,
+        'winner_article_id': None,
+    }, merge=True)
+
+    flash(f'Voting is now open for {_month_display_name(next_key)}.')
+    return redirect(url_for('settings'))
+
+
+@app.route('/meetings')
+@login_required
+def meetings():
+    cycles_list = []
+    for c in db.collection('meetings').stream():
+        d = c.to_dict()
+        cycles_list.append({
+            'key': c.id,
+            'display_name': _month_display_name(c.id),
+            'submission_deadline': d.get('submission_deadline'),
+            'voting_deadline': d.get('voting_deadline'),
+            'meeting_date': d.get('meeting_date'),
+            'voting_open': d.get('voting_open', False),
+            'winner_announced': d.get('winner_announced', False),
+        })
+    cycles_list.sort(key=lambda c: c['key'], reverse=True)
+    return render_template('meetings.html', cycles=cycles_list)
 
 
 @app.route('/settings', methods=['GET', 'POST'])
@@ -654,10 +759,21 @@ def settings():
     if request.method == 'GET':
         form.emoji.data = current_user.emoji
 
+    taken_emojis = {
+        d.get('emoji')
+        for u in db.collection('users').stream()
+        for d in [u.to_dict()]
+        if u.id != current_user.id and d.get('emoji')
+    }
+
     if form.validate_on_submit():
-        db.collection('users').document(current_user.id).update({'emoji': form.emoji.data})
-        flash('Emoji updated!')
-        return redirect(url_for('settings'))
+        chosen = form.emoji.data
+        if chosen != current_user.emoji and chosen in taken_emojis:
+            flash('That emoji is already taken by another member — pick a different one.')
+        else:
+            db.collection('users').document(current_user.id).update({'emoji': chosen})
+            flash('Emoji updated!')
+            return redirect(url_for('settings'))
 
     admin_data = None
     if current_user.is_admin:
@@ -672,12 +788,23 @@ def settings():
             })
         users_list.sort(key=lambda x: (not x['is_admin'], x['username'].lower()))
 
-        meetings_list = [{'id': m.id, **m.to_dict()} for m in db.collection('meetings').stream()]
-        meetings_list.sort(key=lambda m: m.get('meeting_date') or datetime.max)
+        cycles_list = []
+        for c in db.collection('meetings').stream():
+            d = c.to_dict()
+            cycles_list.append({
+                'key': c.id,
+                'display_name': _month_display_name(c.id),
+                'submission_deadline': d.get('submission_deadline'),
+                'voting_deadline': d.get('voting_deadline'),
+                'meeting_date': d.get('meeting_date'),
+                'voting_open': d.get('voting_open', False),
+                'winner_announced': d.get('winner_announced', False),
+            })
+        cycles_list.sort(key=lambda c: c['key'], reverse=True)
 
-        admin_data = {'users': users_list, 'meetings': meetings_list}
+        admin_data = {'users': users_list, 'cycles': cycles_list}
 
-    return render_template('settings.html', form=form, admin_data=admin_data)
+    return render_template('settings.html', form=form, admin_data=admin_data, taken_emojis=taken_emojis)
 
 
 if __name__ == '__main__':

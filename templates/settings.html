@@ -12,8 +12,18 @@
             <form method="POST" novalidate>
                 {{ form.hidden_tag() }}
                 <div class="mb-3">
-                    <label class="form-label">Emoji Avatar</label>
-                    {{ form.emoji(class="form-select w-auto") }}
+                    <label for="emoji">Emoji Avatar</label>
+                    <select name="emoji" id="emoji" class="custom-select w-auto">
+                        {% for value, label in form.emoji.choices %}
+                            {% set is_taken = value in taken_emojis and value != current_user.emoji %}
+                            <option value="{{ value }}"
+                                {% if value == form.emoji.data %}selected{% endif %}
+                                {% if is_taken %}disabled{% endif %}>
+                                {{ label }}{% if is_taken %} (taken){% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">Emoji already used by another member are grayed out and can't be selected.</small>
                 </div>
                 {{ form.submit(class="btn btn-primary") }}
             </form>
@@ -35,7 +45,7 @@
                             <th>Username</th>
                             <th>Emoji</th>
                             <th>Role</th>
-                            <th class="text-end">Actions</th>
+                            <th class="text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -45,12 +55,12 @@
                             <td>{{ u.emoji }}</td>
                             <td>
                                 {% if u.is_admin %}
-                                    <span class="badge bg-success">Admin</span>
+                                    <span class="badge badge-success">Admin</span>
                                 {% else %}
                                     <span class="text-muted">Member</span>
                                 {% endif %}
                             </td>
-                            <td class="text-end">
+                            <td class="text-right">
                                 {% if u.id == current_user.id %}
                                     <span class="text-muted small">(you)</span>
                                 {% else %}
@@ -76,42 +86,68 @@
 
         <div class="card mb-5">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h4 class="mb-0">Meetings</h4>
-                <a href="{{ url_for('add_meeting') }}" class="btn btn-sm btn-success">Add Meeting</a>
+                <h4 class="mb-0">Voting Cycles &amp; Deadlines</h4>
+                <form action="{{ url_for('open_next_cycle') }}" method="POST"
+                      onsubmit="return confirm('This closes voting for the current month (computing its winner) and opens voting for next month right now. Continue?');">
+                    <button type="submit" class="btn btn-sm btn-success">Open Next Month's Voting</button>
+                </form>
             </div>
-            <div class="card-body p-0">
-                {% if admin_data.meetings %}
+            <div class="card-body">
+                <form action="{{ url_for('save_cycle') }}" method="POST" class="form-row align-items-end mb-4">
+                    <div class="col-auto mb-2">
+                        <label class="small mb-0">Month</label>
+                        <input type="month" name="month" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="col-auto mb-2">
+                        <label class="small mb-0">Upload deadline</label>
+                        <input type="date" name="submission_deadline" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-auto mb-2">
+                        <label class="small mb-0">Voting deadline</label>
+                        <input type="date" name="voting_deadline" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-auto mb-2">
+                        <label class="small mb-0">Meeting date</label>
+                        <input type="date" name="meeting_date" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-auto mb-2">
+                        <button type="submit" class="btn btn-sm btn-outline-primary">Save Dates</button>
+                    </div>
+                </form>
+
+                {% if admin_data.cycles %}
                     <table class="table mb-0 align-middle">
                         <thead>
                             <tr>
-                                <th>Title</th>
-                                <th>Date</th>
-                                <th>Reschedule</th>
-                                <th class="text-end">Actions</th>
+                                <th>Month</th>
+                                <th>Upload deadline</th>
+                                <th>Voting deadline</th>
+                                <th>Meeting date</th>
+                                <th>Status</th>
+                                <th class="text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for m in admin_data.meetings %}
+                            {% for c in admin_data.cycles %}
                             <tr>
-                                <td>{{ m.title or 'Untitled meeting' }}</td>
+                                <td>{{ c.display_name }}</td>
+                                <td>{{ c.submission_deadline.strftime('%d.%m.%Y') if c.submission_deadline else '—' }}</td>
+                                <td>{{ c.voting_deadline.strftime('%d.%m.%Y') if c.voting_deadline else '—' }}</td>
+                                <td>{{ c.meeting_date.strftime('%d.%m.%Y') if c.meeting_date else '—' }}</td>
                                 <td>
-                                    {% if m.meeting_date %}
-                                        {{ m.meeting_date.strftime('%d.%m.%Y') }}
+                                    {% if c.winner_announced %}
+                                        <span class="badge badge-secondary">Closed</span>
+                                    {% elif c.voting_open %}
+                                        <span class="badge badge-success">Voting open</span>
                                     {% else %}
-                                        <span class="text-muted">No date set</span>
+                                        <span class="text-muted">Upcoming</span>
                                     {% endif %}
                                 </td>
-                                <td>
-                                    <form action="{{ url_for('reschedule_meeting', meeting_id=m.id) }}" method="POST" class="d-flex gap-2">
-                                        <input type="date" name="meeting_date" class="form-control form-control-sm" required>
-                                        <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
-                                    </form>
-                                </td>
-                                <td class="text-end">
-                                    <form action="{{ url_for('cancel_meeting', meeting_id=m.id) }}" method="POST" class="d-inline">
+                                <td class="text-right">
+                                    <form action="{{ url_for('delete_cycle', month_key=c.key) }}" method="POST" class="d-inline">
                                         <button type="submit" class="btn btn-sm btn-outline-danger"
-                                                onclick="return confirm('Cancel this meeting?');">
-                                            Cancel
+                                                onclick="return confirm('Delete deadline info for {{ c.display_name }}?');">
+                                            Delete
                                         </button>
                                     </form>
                                 </td>
@@ -120,7 +156,7 @@
                         </tbody>
                     </table>
                 {% else %}
-                    <p class="text-muted p-3 mb-0">No meetings scheduled yet.</p>
+                    <p class="text-muted mb-0">No custom deadlines set yet — months default to the real calendar month for voting, with a generic 7/14-day upload/voting window.</p>
                 {% endif %}
             </div>
         </div>
