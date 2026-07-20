@@ -11,11 +11,35 @@
         </div>
     {% endif %}
 
+    {% if announcement %}
+        <div id="confetti-popup" class="popup" style="position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.5); z-index:1050;">
+            <div class="popup-content bg-white p-4 rounded text-center shadow" style="max-width:420px;">
+                <h4>🎉 Voting Results Are In! 🎉</h4>
+                <p class="mb-1">The winning article for <strong>{{ announcement.display_name }}</strong> is:</p>
+                <p class="mb-3"><strong>{{ announcement.title }}</strong><br>submitted by {{ announcement.user_name }}</p>
+                <form action="{{ url_for('dismiss_announcement', month_key=announcement.month_key) }}" method="POST">
+                    <button type="submit" class="btn btn-primary">Close</button>
+                </form>
+            </div>
+        </div>
+        <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                var end = Date.now() + 4000;
+                (function frame() {
+                    confetti({ particleCount: 4, angle: 60, spread: 60, origin: { x: 0 } });
+                    confetti({ particleCount: 4, angle: 120, spread: 60, origin: { x: 1 } });
+                    if (Date.now() < end) requestAnimationFrame(frame);
+                })();
+            });
+        </script>
+    {% endif %}
+
     {% for club in journal_clubs %}
         <div class="card mb-5">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h3 class="mb-0">{{ club.display_name }} Journal Club 🧠</h3>
-                {% if club.is_current %}
+                {% if club.is_open %}
                     <span class="badge bg-success">Voting open</span>
                 {% endif %}
             </div>

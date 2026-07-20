@@ -5,11 +5,9 @@
     <div class="row">
         <div class="col-md-8 offset-md-2">
             <h1 class="text-center">{{ article['title'] }}</h1>
-            <p class="text-muted text-center">Uploaded by: {{ article['uploaded_by'] }}</p>
-            
             {% if pdf_url %}
                 <div class="embed-responsive embed-responsive-16by9 mb-4">
-                    <!-- Embed PDF in the page -->
+<!-- Embed PDF in the page -->
                     <iframe class="embed-responsive-item" src="{{ pdf_url }}" allowfullscreen>
                         Your browser does not support iframes.
                     </iframe>
@@ -20,7 +18,7 @@
             {% else %}
                 <p class="alert alert-warning text-center">No PDF available for this article.</p>
             {% endif %}
-            <p><strong>Uploaded by:</strong> {{ article.user_name }} {{ article.get('emoji', '') }}</p>  
+            <p class="text-center"><strong>Uploaded by:</strong> {{ article.user_name }} {{ article.get('emoji', '') }}</p>
             <div class="text-center mt-4">
                 <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
             </div>
